@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { products, formatYearMonth, getPlanMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { Product } from "@/lib/types";
-import { Download } from "lucide-react";
+import { Download, Database } from "lucide-react";
 
 const GROUP_COLORS = [
   { header: "bg-blue-600",   total: "bg-blue-50"   },
@@ -28,7 +28,7 @@ function buildMonthDays(ym: number) {
 }
 
 export default function ScheduleView() {
-  const { planBaseMonth, operatingDays: masterOperatingDays, lineMasters } = useMasterStore();
+  const { planBaseMonth, operatingDays: masterOperatingDays, lineMasters, productMasters } = useMasterStore();
   const [search, setSearch] = useState("");
   const [selectedYM, setSelectedYM] = useState(planBaseMonth);
 
@@ -155,6 +155,70 @@ export default function ScheduleView() {
     URL.revokeObjectURL(url);
   }
 
+  // 基幹システム用CSV: 製品コード × 月日（横軸）のワイドフォーマット
+  function handleKikanCsvExport() {
+    const exportMonths = getPlanMonths(planBaseMonth);
+
+    // 全月の稼働日・日量を事前計算
+    type MonthMeta = { ym: number; opNums: number[]; dqMap: Map<string, number> };
+    const monthMetas: MonthMeta[] = exportMonths.map((ym) => {
+      const mDays = buildMonthDays(ym);
+      const masterEntry = masterOperatingDays.find((o) => o.yearMonth === ym);
+      const opNums = masterEntry
+        ? masterEntry.operatingDates
+        : mDays.filter((d) => d.dow !== 0 && d.dow !== 6).map((d) => d.day);
+      const dqMap = new Map<string, number>();
+      products.forEach((p) => {
+        const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
+        const dq = mp && opNums.length > 0
+          ? Math.round(mp.productionSchedule / opNums.length)
+          : 0;
+        dqMap.set(p.id, dq);
+      });
+      return { ym, opNums, dqMap };
+    });
+
+    // 横軸: 全月の全カレンダー日 → YYYY/MM/DD
+    type DayCol = { ym: number; day: number; label: string };
+    const dayCols: DayCol[] = [];
+    monthMetas.forEach(({ ym }) => {
+      const mDays = buildMonthDays(ym);
+      const ymStr = String(ym);
+      mDays.forEach(({ day }) => {
+        const dd = String(day).padStart(2, "0");
+        dayCols.push({ ym, day, label: `${ymStr.slice(0, 4)}/${ymStr.slice(4)}/${dd}` });
+      });
+    });
+
+    // ヘッダー行
+    const rows: string[][] = [
+      ["製品コード", "製造器種名", "ライン", ...dayCols.map((c) => c.label)],
+    ];
+
+    // 製造器種名 → 製品コードのマップ（productMasters から引く）
+    const codeMap = new Map(productMasters.map((pm) => [pm.modelCode, pm.code]));
+
+    // データ行: 全品目（フィルタなし）
+    products.forEach((p) => {
+      const productCode = codeMap.get(p.manufacturingItemCode) || p.manufacturingItemCode;
+      const dayValues = dayCols.map(({ ym, day }) => {
+        const meta = monthMetas.find((m) => m.ym === ym)!;
+        return meta.opNums.includes(day) ? String(meta.dqMap.get(p.id) ?? 0) : "0";
+      });
+      rows.push([productCode, p.manufacturingItemCode, String(p.primaryLine), ...dayValues]);
+    });
+
+    const base = String(planBaseMonth);
+    const csv = "\uFEFF" + rows.map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `基幹連携_日別生産計画_${base.slice(0, 4)}年${base.slice(4)}月〜先6ヶ月.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-5">
       {/* ツールバー */}
@@ -183,6 +247,13 @@ export default function ScheduleView() {
           >
             <Download className="w-3.5 h-3.5" />
             先6ヶ月 CSV出力
+          </button>
+          <button
+            onClick={handleKikanCsvExport}
+            className="flex items-center gap-1.5 text-xs bg-indigo-600 text-white rounded px-3 py-1.5 hover:bg-indigo-700 whitespace-nowrap"
+          >
+            <Database className="w-3.5 h-3.5" />
+            基幹連携 CSV
           </button>
         </div>
         <span className="text-xs text-gray-400">
