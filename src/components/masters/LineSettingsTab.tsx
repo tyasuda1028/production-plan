@@ -9,16 +9,20 @@ function EditableCell({
   value,
   onChange,
   placeholder,
+  type = "text",
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  type?: "text" | "number";
 }) {
   return (
     <input
+      type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
+      min={type === "number" ? 0 : undefined}
       className="w-full text-xs border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
     />
   );
@@ -36,7 +40,10 @@ export default function LineSettingsTab() {
 
   function saveEdit() {
     if (editBuf) {
-      updateLineMaster(editBuf.lineNumber, editBuf);
+      updateLineMaster(editBuf.lineNumber, {
+        ...editBuf,
+        dailyCapacity: Number(editBuf.dailyCapacity) || 0,
+      });
       setEditing(null);
       setEditBuf(null);
     }
@@ -51,8 +58,8 @@ export default function LineSettingsTab() {
     <div className="space-y-4">
       {/* 説明 */}
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        各ラインに<strong>分類・工場名・ライン名</strong>を設定します。
-        設定内容はダッシュボードのラインサマリーや生産計画表のフィルターに反映されます。
+        各ラインに<strong>分類・工場名・ライン名・日量能力</strong>を設定します。
+        日量能力はダッシュボードの日量推移グラフの基準線に反映されます。
       </div>
 
       {/* テーブル */}
@@ -64,6 +71,7 @@ export default function LineSettingsTab() {
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">分類</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">工場名</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">ライン名</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-700 whitespace-nowrap">日量能力（台/日）</th>
               <th className="px-4 py-2.5 w-16" />
             </tr>
           </thead>
@@ -96,6 +104,14 @@ export default function LineSettingsTab() {
                     />
                   </td>
                   <td className="px-4 py-2">
+                    <EditableCell
+                      type="number"
+                      value={String(editBuf.dailyCapacity)}
+                      onChange={(v) => setEditBuf({ ...editBuf, dailyCapacity: Number(v) })}
+                      placeholder="例: 540"
+                    />
+                  </td>
+                  <td className="px-4 py-2">
                     <div className="flex gap-1">
                       <button
                         onClick={saveEdit}
@@ -124,6 +140,12 @@ export default function LineSettingsTab() {
                   </td>
                   <td className="px-4 py-2.5 text-xs text-gray-700">{l.factoryName}</td>
                   <td className="px-4 py-2.5 text-xs text-gray-700">{l.lineName}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <span className="text-xs font-semibold text-gray-800">
+                      {(l.dailyCapacity ?? 0).toLocaleString()}
+                    </span>
+                    <span className="text-xs text-gray-400 ml-1">台/日</span>
+                  </td>
                   <td className="px-4 py-2.5">
                     <button
                       onClick={() => startEdit(l)}

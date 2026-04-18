@@ -43,6 +43,14 @@ export default function LineCard({ line }: Props) {
     .map((n) => lineMasters.find((l) => l.lineNumber === n)?.lineName ?? `ライン${n}`)
     .join(" / ");
   const factoryName = lineMaster?.factoryName ?? `工場${line.factoryCode}`;
+  // 日量能力: ラインマスターの合計、なければ lineSummary のデフォルト値
+  const dailyCapacity = useMemo(() => {
+    const fromMasters = line.lines.reduce((sum, n) => {
+      const lm = lineMasters.find((l) => l.lineNumber === n);
+      return sum + (lm?.dailyCapacity ?? 0);
+    }, 0);
+    return fromMasters > 0 ? fromMasters : line.dailyCapacity;
+  }, [line.lines, line.dailyCapacity, lineMasters]);
 
   // 表示月: 前月 + 当月から先6ヶ月 = 計7ヶ月
   const displayMonths = useMemo(() =>
@@ -109,7 +117,7 @@ export default function LineCard({ line }: Props) {
             <h3 className="font-semibold text-gray-800">{classification}</h3>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            {factoryName} | {lineNames} | 日産能力 {line.dailyCapacity.toLocaleString()} 台
+            {factoryName} | {lineNames} | 日産能力 {dailyCapacity.toLocaleString()} 台
           </p>
         </div>
         <div className="text-right text-xs text-gray-400">
@@ -222,11 +230,11 @@ export default function LineCard({ line }: Props) {
             />
             {/* 基準線: 日産能力 */}
             <ReferenceLine
-              y={line.dailyCapacity}
+              y={dailyCapacity}
               stroke="#dc2626"
               strokeDasharray="4 2"
               label={{
-                value: `能力 ${line.dailyCapacity.toLocaleString()}`,
+                value: `能力 ${dailyCapacity.toLocaleString()}`,
                 position: "insideTopRight",
                 fontSize: 9,
                 fill: "#dc2626",

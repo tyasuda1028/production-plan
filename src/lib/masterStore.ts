@@ -39,10 +39,10 @@ function buildDefaultOperatingDays(): OperatingDaysMaster[] {
 
 // デフォルトラインマスター
 const defaultLineMasters: LineMaster[] = [
-  { lineNumber: 2, lineName: "ライン2", factoryName: "02工場", classification: "ブライツ" },
-  { lineNumber: 3, lineName: "ライン3", factoryName: "02工場", classification: "ブライツ" },
-  { lineNumber: 4, lineName: "ライン4", factoryName: "02工場", classification: "ブライツ" },
-  { lineNumber: 7, lineName: "ライン7", factoryName: "02工場", classification: "ブライツ" },
+  { lineNumber: 2, lineName: "ライン2", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 540 },
+  { lineNumber: 3, lineName: "ライン3", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 330 },
+  { lineNumber: 4, lineName: "ライン4", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 200 },
+  { lineNumber: 7, lineName: "ライン7", factoryName: "02工場", classification: "ブライツ", dailyCapacity:  90 },
 ];
 
 interface MasterStore {

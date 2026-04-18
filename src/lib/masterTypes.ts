@@ -23,6 +23,7 @@ export interface LineMaster {
   lineName: string;        // ライン名（例: ライン2）
   factoryName: string;     // 工場名（例: 第1工場）
   classification: string;  // 分類（例: ブライツ）
+  dailyCapacity: number;   // 日量能力（台/日）
 }
 
 // ========== 販売計画オーバーライド ==========
