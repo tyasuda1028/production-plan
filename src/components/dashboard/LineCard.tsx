@@ -43,13 +43,15 @@ export default function LineCard({ line }: Props) {
     .map((n) => lineMasters.find((l) => l.lineNumber === n)?.lineName ?? `ライン${n}`)
     .join(" / ");
   const factoryName = lineMaster?.factoryName ?? `工場${line.factoryCode}`;
-  // 日量能力: ラインマスターの合計、なければ lineSummary のデフォルト値
+  // 日量能力: ラインマスターの合計（旧 localStorage データで undefined の場合は 0 として扱う）
+  // なければ lineSummary のデフォルト値にフォールバック
   const dailyCapacity = useMemo(() => {
     const fromMasters = line.lines.reduce((sum, n) => {
       const lm = lineMasters.find((l) => l.lineNumber === n);
-      return sum + (lm?.dailyCapacity ?? 0);
+      const cap = typeof lm?.dailyCapacity === "number" ? lm.dailyCapacity : 0;
+      return sum + cap;
     }, 0);
-    return fromMasters > 0 ? fromMasters : line.dailyCapacity;
+    return fromMasters > 0 ? fromMasters : (line.dailyCapacity ?? 0);
   }, [line.lines, line.dailyCapacity, lineMasters]);
 
   // 表示月: 前月 + 当月から先6ヶ月 = 計7ヶ月
@@ -210,7 +212,11 @@ export default function LineCard({ line }: Props) {
           <LineChart data={chartData} margin={{ top: 4, right: 28, left: -18, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-            <YAxis tick={{ fontSize: 10 }} />
+            {/* domain を dailyCapacity まで伸ばして基準線が確実に見えるようにする */}
+            <YAxis
+              tick={{ fontSize: 10 }}
+              domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, dailyCapacity) * 1.15)]}
+            />
             <Tooltip
               formatter={(v, name) => [
                 typeof v === "number" ? v.toLocaleString() : v,

@@ -106,7 +106,7 @@ export default function LineSettingsTab() {
                   <td className="px-4 py-2">
                     <EditableCell
                       type="number"
-                      value={String(editBuf.dailyCapacity)}
+                      value={String(editBuf.dailyCapacity ?? "")}
                       onChange={(v) => setEditBuf({ ...editBuf, dailyCapacity: Number(v) })}
                       placeholder="例: 540"
                     />
