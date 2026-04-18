@@ -186,7 +186,6 @@ export default function PlanTable() {
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">工場名</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">ライン名</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">区分</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">品目名</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">コード</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">方式</th>
                 <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 whitespace-nowrap">在庫</th>
@@ -230,13 +229,10 @@ export default function PlanTable() {
                         {p.planCategory1}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
-                        <div className="font-medium text-gray-800 text-xs">{p.productName}</div>
+                        <div className="text-xs text-gray-500 font-mono">{p.manufacturingItemCode}</div>
                         {p.comment && (
                           <div className="text-xs text-amber-600 mt-0.5">{p.comment}</div>
                         )}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-500 font-mono whitespace-nowrap">
-                        {p.manufacturingItemCode}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <span className={`text-xs px-1.5 py-0.5 rounded ${METHOD_COLORS[p.productionMethod] ?? "bg-gray-100 text-gray-600"}`}>
@@ -267,7 +263,7 @@ export default function PlanTable() {
                     {/* 展開行：月次詳細 */}
                     {expanded && (
                       <tr key={`${p.id}-detail`} className="bg-blue-50/40 border-b border-blue-100">
-                        <td colSpan={15} className="px-6 py-3">
+                        <td colSpan={14} className="px-6 py-3">
                           <div className="overflow-x-auto">
                             <table className="text-xs w-full">
                               <thead>

@@ -182,9 +182,9 @@ export default function ProductSimCard({
         <div>
           <div className="flex items-center gap-2">
             {hasShortage && <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />}
-            <span className="font-semibold text-gray-800 text-sm">{product.productName}</span>
+            <span className="font-semibold text-gray-800 text-sm font-mono">{product.manufacturingItemCode}</span>
           </div>
-          <p className="text-xs text-gray-400 mt-0.5 font-mono">{product.manufacturingItemCode} | ライン {product.primaryLine}</p>
+          <p className="text-xs text-gray-400 mt-0.5">ライン {product.primaryLine}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
