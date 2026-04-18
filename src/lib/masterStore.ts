@@ -52,7 +52,9 @@ interface MasterStore {
 
   // ラインマスター
   lineMasters: LineMaster[];
+  addLineMaster: (l: LineMaster) => void;
   updateLineMaster: (lineNumber: number, patch: Partial<LineMaster>) => void;
+  deleteLineMaster: (lineNumber: number) => void;
 
   // 製品マスター
   productMasters: ProductMaster[];
@@ -88,11 +90,22 @@ export const useMasterStore = create<MasterStore>()(
 
       // ── ラインマスター ──
       lineMasters: defaultLineMasters,
+
+      addLineMaster: (l) =>
+        set((s) => ({
+          lineMasters: [...s.lineMasters, l].sort((a, b) => a.lineNumber - b.lineNumber),
+        })),
+
       updateLineMaster: (lineNumber, patch) =>
         set((s) => ({
           lineMasters: s.lineMasters.map((l) =>
             l.lineNumber === lineNumber ? { ...l, ...patch } : l
           ),
+        })),
+
+      deleteLineMaster: (lineNumber) =>
+        set((s) => ({
+          lineMasters: s.lineMasters.filter((l) => l.lineNumber !== lineNumber),
         })),
 
       // ── 製品マスター ──
