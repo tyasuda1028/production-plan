@@ -7,7 +7,6 @@ import { Plus, Pencil, Trash2, Upload, Download, Check, X } from "lucide-react";
 
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
 const METHOD_OPTIONS = ["B:在庫製品", "D:受注生産", "C:計画生産"];
-const LINE_OPTIONS = [2, 3, 4, 7];
 
 const emptyProduct = (): ProductMaster => ({
   code: "",
@@ -57,7 +56,7 @@ function EditableCell({ value, onChange, placeholder, className }: {
 }
 
 export default function ProductMasterTab() {
-  const { productMasters, addProduct, updateProduct, deleteProduct, importProducts } = useMasterStore();
+  const { productMasters, addProduct, updateProduct, deleteProduct, importProducts, lineMasters } = useMasterStore();
   const [editing, setEditing] = useState<string | null>(null); // modelCode をキーとして使用
   const [editBuf, setEditBuf] = useState<ProductMaster>(emptyProduct());
   const [adding, setAdding] = useState(false);
@@ -147,7 +146,11 @@ export default function ProductMasterTab() {
         <td className="px-3 py-2">
           <select value={buf.primaryLine} onChange={(e) => setBuf({ ...buf, primaryLine: +e.target.value })}
             className="text-xs border border-blue-300 rounded px-1.5 py-1 bg-white w-full">
-            {LINE_OPTIONS.map((l) => <option key={l} value={l}>{l}</option>)}
+            {lineMasters.map((l) => (
+              <option key={l.lineNumber} value={l.lineNumber}>
+                {l.lineName}（{l.lineNumber}）
+              </option>
+            ))}
           </select>
         </td>
         <td className="px-3 py-2">

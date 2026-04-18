@@ -38,9 +38,10 @@ const EMPTY_LINE: Omit<LineMaster, "lineNumber"> = {
 };
 
 export default function LineSettingsTab() {
-  const { lineMasters, addLineMaster, updateLineMaster, deleteLineMaster } = useMasterStore();
+  const { lineMasters, addLineMaster, updateLineMaster, replaceLineMaster, deleteLineMaster } = useMasterStore();
 
-  const [editing, setEditing] = useState<number | null>(null);
+  const [editing, setEditing] = useState<number | null>(null);       // 編集中の元ライン番号
+  const [editOriginalNum, setEditOriginalNum] = useState<number | null>(null);
   const [editBuf, setEditBuf] = useState<LineMaster | null>(null);
 
   const [adding, setAdding] = useState(false);
@@ -54,21 +55,26 @@ export default function LineSettingsTab() {
   function startEdit(l: LineMaster) {
     setAdding(false);
     setEditing(l.lineNumber);
+    setEditOriginalNum(l.lineNumber);
     setEditBuf({ ...l });
   }
 
   function saveEdit() {
-    if (!editBuf) return;
-    updateLineMaster(editBuf.lineNumber, {
-      ...editBuf,
-      dailyCapacity: Number(editBuf.dailyCapacity) || 0,
-    });
+    if (!editBuf || editOriginalNum === null) return;
+    const updated: LineMaster = { ...editBuf, dailyCapacity: Number(editBuf.dailyCapacity) || 0 };
+    if (updated.lineNumber !== editOriginalNum) {
+      replaceLineMaster(editOriginalNum, updated);
+    } else {
+      updateLineMaster(editOriginalNum, updated);
+    }
     setEditing(null);
+    setEditOriginalNum(null);
     setEditBuf(null);
   }
 
   function cancelEdit() {
     setEditing(null);
+    setEditOriginalNum(null);
     setEditBuf(null);
   }
 
@@ -142,8 +148,17 @@ export default function LineSettingsTab() {
               editing === l.lineNumber && editBuf ? (
                 /* ── 編集行 ── */
                 <tr key={l.lineNumber} className="bg-blue-50/60">
-                  <td className="px-4 py-2 text-xs font-mono text-gray-500">
-                    ライン {l.lineNumber}
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-400 whitespace-nowrap">ライン</span>
+                      <EditableCell
+                        type="number"
+                        value={String(editBuf.lineNumber)}
+                        onChange={(v) => setEditBuf({ ...editBuf, lineNumber: parseInt(v) || editBuf.lineNumber })}
+                        placeholder="番号"
+                        className="w-14"
+                      />
+                    </div>
                   </td>
                   <td className="px-4 py-2">
                     <EditableCell
