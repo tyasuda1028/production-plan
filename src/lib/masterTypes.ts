@@ -1,7 +1,7 @@
 // ========== 製品マスター ==========
 export interface ProductMaster {
-  code: string;               // 製品コード（truck-loaderと共通キー）
-  name: string;               // 製品名
+  code: string;               // 製品コード（truck-loaderと共通キー・任意）
+  modelCode: string;          // 製造器種名（例: FHE-16AW1-G）
   primaryLine: number;        // 主ライン
   planLot: number;            // 計画ロット
   reorderPoint: number;       // 発注点
@@ -16,6 +16,14 @@ export const PALLET_TYPES: Record<string, { name: string; size: string }> = {
   P02: { name: '大型', size: '1200mm' },
   P03: { name: '軽量', size: '800mm' },
 };
+
+// ========== ラインマスター ==========
+export interface LineMaster {
+  lineNumber: number;      // ライン番号 (2, 3, 4, 7)
+  lineName: string;        // ライン名（例: ライン2）
+  factoryName: string;     // 工場名（例: 第1工場）
+  classification: string;  // 分類（例: ブライツ）
+}
 
 // ========== 稼働日マスター ==========
 export interface OperatingDaysMaster {

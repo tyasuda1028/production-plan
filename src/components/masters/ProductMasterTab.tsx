@@ -11,7 +11,7 @@ const LINE_OPTIONS = [2, 3, 4, 7];
 
 const emptyProduct = (): ProductMaster => ({
   code: "",
-  name: "",
+  modelCode: "",
   primaryLine: 2,
   planLot: 10,
   reorderPoint: 50,
@@ -23,9 +23,9 @@ const emptyProduct = (): ProductMaster => ({
 
 function CsvExportButton({ products }: { products: ProductMaster[] }) {
   const handle = () => {
-    const header = "製品コード,製品名,個/枚,パレット型,ライン,ロット,発注点,生産方式";
+    const header = "製品コード,製造器種名,個/枚,パレット型,ライン,ロット,発注点,生産方式";
     const rows = products.map((p) =>
-      [p.code, p.name, p.capacityPerPallet, p.palletType, p.primaryLine, p.planLot, p.reorderPoint, p.productionMethod].join(",")
+      [p.code, p.modelCode, p.capacityPerPallet, p.palletType, p.primaryLine, p.planLot, p.reorderPoint, p.productionMethod].join(",")
     );
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -43,29 +43,49 @@ function CsvExportButton({ products }: { products: ProductMaster[] }) {
   );
 }
 
+function EditableCell({ value, onChange, placeholder, className }: {
+  value: string | number; onChange: (v: string) => void; placeholder?: string; className?: string;
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={`w-full text-xs border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white ${className ?? ""}`}
+    />
+  );
+}
+
 export default function ProductMasterTab() {
   const { productMasters, addProduct, updateProduct, deleteProduct, importProducts } = useMasterStore();
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null); // modelCode をキーとして使用
   const [editBuf, setEditBuf] = useState<ProductMaster>(emptyProduct());
   const [adding, setAdding] = useState(false);
   const [newBuf, setNewBuf] = useState<ProductMaster>(emptyProduct());
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState("");
 
+  // 行キー: modelCode 優先、なければ code
+  const rowKey = (p: ProductMaster) => p.modelCode || p.code || Math.random().toString();
+
   function startEdit(p: ProductMaster) {
-    setEditing(p.code);
+    setEditing(rowKey(p));
     setEditBuf({ ...p });
   }
 
   function saveEdit() {
     if (editing) {
-      updateProduct(editing, editBuf);
+      useMasterStore.setState((s) => ({
+        productMasters: s.productMasters.map((p) =>
+          rowKey(p) === editing ? { ...editBuf } : p
+        ),
+      }));
       setEditing(null);
     }
   }
 
   function saveNew() {
-    if (!newBuf.code.trim() || !newBuf.name.trim()) return;
+    if (!newBuf.modelCode.trim()) return;
     addProduct(newBuf);
     setAdding(false);
     setNewBuf(emptyProduct());
@@ -81,11 +101,12 @@ export default function ProductMasterTab() {
         const lines = text.split(/\r?\n/).filter((l) => l.trim());
         const rows: ProductMaster[] = [];
         for (let i = 1; i < lines.length; i++) {
-          const [code, name, cap, pallet, line, lot, reorder, method] = lines[i].split(",").map((s) => s.trim());
-          if (!code || !name) continue;
+          const cols = lines[i].split(",").map((s) => s.trim());
+          const [code, modelCode, cap, pallet, line, lot, reorder, method] = cols;
+          if (!modelCode) continue;
           rows.push({
-            code,
-            name,
+            code: code ?? "",
+            modelCode,
             capacityPerPallet: parseInt(cap) || 20,
             palletType: (["P01","P02","P03"].includes(pallet) ? pallet : "P01") as ProductMaster["palletType"],
             primaryLine: parseInt(line) || 2,
@@ -107,21 +128,21 @@ export default function ProductMasterTab() {
     e.target.value = "";
   }
 
-  function EditRow({ p, buf, setBuf, onSave, onCancel }: {
-    p?: ProductMaster; buf: ProductMaster; setBuf: (v: ProductMaster) => void;
-    onSave: () => void; onCancel: () => void;
-  }) {
+  function EditRow({ isNew }: { isNew?: boolean }) {
+    const buf = isNew ? newBuf : editBuf;
+    const setBuf = isNew
+      ? (v: ProductMaster) => setNewBuf(v)
+      : (v: ProductMaster) => setEditBuf(v);
+    const onSave = isNew ? saveNew : saveEdit;
+    const onCancel = isNew ? () => setAdding(false) : () => setEditing(null);
+
     return (
-      <tr className="bg-blue-50/60">
+      <tr className="bg-blue-50/60 border-b border-blue-200">
         <td className="px-3 py-2">
-          <input value={buf.code} onChange={(e) => setBuf({ ...buf, code: e.target.value })}
-            className="w-full text-xs border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            placeholder="製品コード" disabled={!!p} />
+          <EditableCell value={buf.code} onChange={(v) => setBuf({ ...buf, code: v })} placeholder="製品コード（任意）" />
         </td>
         <td className="px-3 py-2">
-          <input value={buf.name} onChange={(e) => setBuf({ ...buf, name: e.target.value })}
-            className="w-full text-xs border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            placeholder="製品名" />
+          <EditableCell value={buf.modelCode} onChange={(v) => setBuf({ ...buf, modelCode: v })} placeholder="FHE-16AW1-G" />
         </td>
         <td className="px-3 py-2">
           <select value={buf.primaryLine} onChange={(e) => setBuf({ ...buf, primaryLine: +e.target.value })}
@@ -160,12 +181,8 @@ export default function ProductMasterTab() {
         </td>
         <td className="px-3 py-2">
           <div className="flex gap-1">
-            <button onClick={onSave} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">
-              <Check className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={onCancel} className="p-1.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300">
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <button onClick={onSave} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700"><Check className="w-3.5 h-3.5" /></button>
+            <button onClick={onCancel} className="p-1.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300"><X className="w-3.5 h-3.5" /></button>
           </div>
         </td>
       </tr>
@@ -190,9 +207,9 @@ export default function ProductMasterTab() {
         <span className="ml-auto text-xs text-gray-400">{productMasters.length} 品目</span>
       </div>
 
-      {/* CSV仕様メモ */}
+      {/* CSV仕様 */}
       <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-700">
-        <strong>CSV形式：</strong> 製品コード, 製品名, 個/枚, パレット型(P01/P02/P03), ライン, ロット, 発注点, 生産方式
+        <strong>CSV形式：</strong> 製品コード, 製造器種名, 個/枚, パレット型(P01/P02/P03), ライン, ロット, 発注点, 生産方式
       </div>
 
       {/* テーブル */}
@@ -201,48 +218,49 @@ export default function ProductMasterTab() {
           <table className="w-full text-sm border-collapse min-w-max">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                {["製品コード","製品名","ライン","個/パレット","パレット型","ロット","発注点","生産方式",""].map((h) => (
-                  <th key={h} className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">{h}</th>
-                ))}
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">製品コード</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">製造器種名<span className="ml-1 text-[10px] text-gray-400">（例: FHE-16AW1-G）</span></th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">ライン</th>
+                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">個/パレット</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">パレット型</th>
+                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">ロット</th>
+                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">発注点</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">生産方式</th>
+                <th className="px-3 py-2.5 w-16" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {adding && (
-                <EditRow buf={newBuf} setBuf={setNewBuf}
-                  onSave={saveNew}
-                  onCancel={() => setAdding(false)} />
-              )}
-              {productMasters.map((p) =>
-                editing === p.code ? (
-                  <EditRow key={p.code} p={p} buf={editBuf} setBuf={setEditBuf}
-                    onSave={saveEdit}
-                    onCancel={() => setEditing(null)} />
+              {adding && <EditRow isNew />}
+              {productMasters.map((p) => {
+                const key = rowKey(p);
+                return editing === key ? (
+                  <EditRow key={key} />
                 ) : (
-                  <tr key={p.code} className={`hover:bg-gray-50 ${!p.active ? "opacity-40" : ""}`}>
-                    <td className="px-3 py-2.5 text-xs font-mono text-gray-600 whitespace-nowrap">{p.code}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-800 whitespace-nowrap">{p.name}</td>
-                    <td className="px-3 py-2.5 text-xs text-center">{p.primaryLine}</td>
-                    <td className="px-3 py-2.5 text-xs text-right">{p.capacityPerPallet}</td>
+                  <tr key={key} className={`hover:bg-gray-50 ${!p.active ? "opacity-40" : ""}`}>
+                    <td className="px-3 py-2.5 text-xs font-mono font-semibold text-gray-800">{p.code}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-gray-800 whitespace-nowrap font-medium">{p.modelCode}</td>
+                    <td className="px-3 py-2.5 text-xs text-center text-gray-600">{p.primaryLine}</td>
+                    <td className="px-3 py-2.5 text-xs text-right text-gray-600">{p.capacityPerPallet}</td>
                     <td className="px-3 py-2.5 text-xs">
-                      <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-600">{p.palletType}</span>
-                      <span className="ml-1 text-gray-400">{PALLET_TYPES[p.palletType]?.size}</span>
+                      <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">{p.palletType}</span>
+                      <span className="ml-1 text-gray-400 text-[10px]">{PALLET_TYPES[p.palletType]?.size}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-right">{p.planLot}</td>
-                    <td className="px-3 py-2.5 text-xs text-right">{p.reorderPoint}</td>
+                    <td className="px-3 py-2.5 text-xs text-right text-gray-600">{p.planLot}</td>
+                    <td className="px-3 py-2.5 text-xs text-right text-gray-600">{p.reorderPoint}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{p.productionMethod}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1">
                         <button onClick={() => startEdit(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => deleteProduct(p.code)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                        <button onClick={() => deleteProduct(p.code || p.modelCode)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
                   </tr>
-                )
-              )}
+                );
+              })}
             </tbody>
           </table>
         </div>

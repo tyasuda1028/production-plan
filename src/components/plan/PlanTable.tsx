@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { products, planMonths, formatYearMonth } from "@/lib/data";
+import { useState, useMemo, useEffect } from "react";
+import { products, getPlanMonths, formatYearMonth } from "@/lib/data";
+import { useMasterStore } from "@/lib/masterStore";
 import { Product, MonthlyPlan } from "@/lib/types";
 import { ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 
@@ -23,20 +24,33 @@ const METHOD_COLORS: Record<string, string> = {
   "D:受注生産": "bg-purple-50 text-purple-700",
 };
 
-const POSITIVE_COLORS: Record<string, string> = {
-  "新": "bg-green-100 text-green-700",
-  "未": "bg-amber-100 text-amber-700",
-  "○": "bg-gray-100 text-gray-600",
-};
-
 export default function PlanTable() {
-  const [search, setSearch] = useState("");
-  const [filterLine, setFilterLine] = useState<string>("all");
-  const [filterMethod, setFilterMethod] = useState<string>("all");
-  const [expandedRows, setExpandedRows] = useState<ExpandedRows>({});
-  const [selectedMonth, setSelectedMonth] = useState<number>(planMonths[0]);
+  const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
+  const lineMasters = useMasterStore((s) => s.lineMasters);
+  const planMonths = getPlanMonths(planBaseMonth);
 
-  const lines = ["all", "2", "3", "4", "7"];
+  const [search, setSearch] = useState("");
+  const [filterClassification, setFilterClassification] = useState("all");
+  const [filterFactory, setFilterFactory] = useState("all");
+  const [filterLineName, setFilterLineName] = useState("all");
+  const [filterMethod, setFilterMethod] = useState("all");
+  const [expandedRows, setExpandedRows] = useState<ExpandedRows>({});
+  const [selectedMonth, setSelectedMonth] = useState<number>(planBaseMonth);
+
+  useEffect(() => { setSelectedMonth(planBaseMonth); }, [planBaseMonth]);
+
+  // ラインマスターから選択肢を生成
+  const classifications = useMemo(() =>
+    [...new Set(lineMasters.map((l) => l.classification))], [lineMasters]);
+  const factories = useMemo(() =>
+    [...new Set(lineMasters.map((l) => l.factoryName))], [lineMasters]);
+  const lineNames = useMemo(() =>
+    lineMasters.map((l) => ({ lineNumber: l.lineNumber, lineName: l.lineName })), [lineMasters]);
+
+  // ライン番号→マスター情報のマップ
+  const lineMap = useMemo(() =>
+    new Map(lineMasters.map((l) => [l.lineNumber, l])), [lineMasters]);
+
   const methods = ["all", "B:在庫製品", "D:受注生産"];
 
   const filtered = useMemo(() => {
@@ -46,13 +60,17 @@ export default function PlanTable() {
         !q ||
         p.productName.toLowerCase().includes(q) ||
         p.manufacturingItemCode.toLowerCase().includes(q) ||
-        p.planCategory1.toLowerCase().includes(q) ||
-        p.responsible.toLowerCase().includes(q);
-      const matchLine = filterLine === "all" || String(p.primaryLine) === filterLine;
+        p.planCategory1.toLowerCase().includes(q);
+
+      const lm = lineMap.get(p.primaryLine);
+      const matchClass = filterClassification === "all" || lm?.classification === filterClassification;
+      const matchFactory = filterFactory === "all" || lm?.factoryName === filterFactory;
+      const matchLine = filterLineName === "all" || lm?.lineName === filterLineName;
       const matchMethod = filterMethod === "all" || p.productionMethod === filterMethod;
-      return matchSearch && matchLine && matchMethod;
+
+      return matchSearch && matchClass && matchFactory && matchLine && matchMethod;
     });
-  }, [search, filterLine, filterMethod]);
+  }, [search, filterClassification, filterFactory, filterLineName, filterMethod, lineMap]);
 
   function toggleRow(id: string) {
     setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -75,18 +93,42 @@ export default function PlanTable() {
             className="w-full text-sm border-none outline-none bg-transparent"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-gray-400" />
+          {/* 分類 */}
           <select
-            value={filterLine}
-            onChange={(e) => setFilterLine(e.target.value)}
+            value={filterClassification}
+            onChange={(e) => setFilterClassification(e.target.value)}
+            className="text-sm border border-gray-200 rounded px-2 py-1.5 bg-white"
+          >
+            <option value="all">全分類</option>
+            {classifications.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          {/* 工場名 */}
+          <select
+            value={filterFactory}
+            onChange={(e) => setFilterFactory(e.target.value)}
+            className="text-sm border border-gray-200 rounded px-2 py-1.5 bg-white"
+          >
+            <option value="all">全工場</option>
+            {factories.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
+          {/* ライン名 */}
+          <select
+            value={filterLineName}
+            onChange={(e) => setFilterLineName(e.target.value)}
             className="text-sm border border-gray-200 rounded px-2 py-1.5 bg-white"
           >
             <option value="all">全ライン</option>
-            {lines.slice(1).map((l) => (
-              <option key={l} value={l}>ライン {l}</option>
+            {lineNames.map(({ lineNumber, lineName }) => (
+              <option key={lineNumber} value={lineName}>{lineName}</option>
             ))}
           </select>
+          {/* 生産方式 */}
           <select
             value={filterMethod}
             onChange={(e) => setFilterMethod(e.target.value)}
@@ -120,11 +162,12 @@ export default function PlanTable() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="w-8 px-2 py-3" />
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">担当</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">分類</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">工場名</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">ライン名</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">区分</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">品目名</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">コード</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">L</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">方式</th>
                 <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 whitespace-nowrap">在庫</th>
                 <th className="px-3 py-3 text-right text-xs font-medium text-blue-600 whitespace-nowrap">販売計画</th>
@@ -139,6 +182,7 @@ export default function PlanTable() {
               {filtered.map((p) => {
                 const mp = plan(p);
                 const expanded = expandedRows[p.id];
+                const lm = lineMap.get(p.primaryLine);
                 return (
                   <>
                     <tr
@@ -153,13 +197,14 @@ export default function PlanTable() {
                           <ChevronRight className="w-3.5 h-3.5 mx-auto" />
                         )}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${POSITIVE_COLORS[p.positive] ?? "bg-gray-100 text-gray-600"}`}>
-                            {p.positive}
-                          </span>
-                          <span className="text-xs text-gray-600">{p.responsible}</span>
-                        </div>
+                      <td className="px-3 py-2.5 text-xs text-gray-700 whitespace-nowrap">
+                        {lm?.classification ?? "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                        {lm?.factoryName ?? "-"}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                        {lm?.lineName ?? `ライン${p.primaryLine}`}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
                         {p.planCategory1}
@@ -173,7 +218,6 @@ export default function PlanTable() {
                       <td className="px-3 py-2.5 text-xs text-gray-500 font-mono whitespace-nowrap">
                         {p.manufacturingItemCode}
                       </td>
-                      <td className="px-3 py-2.5 text-center text-xs text-gray-600">{p.primaryLine}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <span className={`text-xs px-1.5 py-0.5 rounded ${METHOD_COLORS[p.productionMethod] ?? "bg-gray-100 text-gray-600"}`}>
                           {p.productionMethod.split(":")[0]}
@@ -203,7 +247,7 @@ export default function PlanTable() {
                     {/* 展開行：月次詳細 */}
                     {expanded && (
                       <tr key={`${p.id}-detail`} className="bg-blue-50/40 border-b border-blue-100">
-                        <td colSpan={14} className="px-6 py-3">
+                        <td colSpan={15} className="px-6 py-3">
                           <div className="overflow-x-auto">
                             <table className="text-xs w-full">
                               <thead>

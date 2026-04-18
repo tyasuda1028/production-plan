@@ -1,5 +1,26 @@
 import { LineSummary, Product } from "./types";
 
+// ── 月ユーティリティ ──────────────────────────────────────────────
+/** base に n ヶ月加算した YYYYMM を返す */
+export function addMonths(base: number, n: number): number {
+  let y = Math.floor(base / 100);
+  let m = (base % 100) + n;
+  while (m > 12) { m -= 12; y++; }
+  while (m < 1)  { m += 12; y--; }
+  return y * 100 + m;
+}
+
+/** base から 6 ヶ月分の YYYYMM 配列を返す */
+export function getPlanMonths(base: number): number[] {
+  return Array.from({ length: 6 }, (_, i) => addMonths(base, i));
+}
+
+// データ生成用: 202601 〜 202712 (24 ヶ月)
+const ALL_DATA_MONTHS: number[] = Array.from({ length: 24 }, (_, i) => addMonths(202601, i));
+
+/** 後方互換: デフォルト計画月リスト (202603 〜 202608) */
+export const planMonths = getPlanMonths(202603);
+
 const MONTHS = [202602, 202603, 202604, 202605, 202606, 202607, 202608, 202609, 202610];
 
 export const lineSummaries: LineSummary[] = [
@@ -90,13 +111,20 @@ export const lineSummaries: LineSummary[] = [
   },
 ];
 
-export const planMonths = [202603, 202604, 202605, 202606, 202607, 202608];
-
 function makePlans(base: number, growth: number): import("./types").MonthlyPlan[] {
-  return planMonths.map((ym, i) => {
-    const sales = Math.round(base * Math.pow(1 + growth, i));
+  // ALL_DATA_MONTHS (202601〜202712) 全月分のデータを生成
+  return ALL_DATA_MONTHS.map((ym) => {
+    // ベース月 202603 からの差分を計算（マイナス可）
+    const baseYM = 202603;
+    const baseYear = Math.floor(baseYM / 100);
+    const baseMonth = baseYM % 100;
+    const curYear = Math.floor(ym / 100);
+    const curMonth = ym % 100;
+    const diff = (curYear - baseYear) * 12 + (curMonth - baseMonth);
+    const sales = Math.max(1, Math.round(base * Math.pow(1 + growth, diff)));
     const required = Math.round(sales * 1.05);
-    const schedule = Math.round(required * (0.95 + Math.random() * 0.1));
+    // ランダムを排除して決定論的に
+    const schedule = Math.round(required * 0.98);
     const surplus = schedule - required;
     const adj = surplus < 0 ? Math.abs(surplus) : 0;
     const endInv = Math.round(base * 1.5 + surplus);

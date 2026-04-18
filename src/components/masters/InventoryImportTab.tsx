@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useMasterStore } from "@/lib/masterStore";
-import { planMonths, formatYearMonth } from "@/lib/data";
+import { getPlanMonths, formatYearMonth } from "@/lib/data";
 import { Upload, FileText, Check, AlertTriangle, Download } from "lucide-react";
 
 interface PreviewRow {
@@ -13,15 +13,16 @@ interface PreviewRow {
 }
 
 export default function InventoryImportTab() {
-  const { productMasters, importInventoryCSV, getInventory, inventorySnapshots } = useMasterStore();
-  const [targetYM, setTargetYM] = useState(planMonths[0]);
+  const { productMasters, importInventoryCSV, getInventory, inventorySnapshots, planBaseMonth } = useMasterStore();
+  const planMonths = getPlanMonths(planBaseMonth);
+  const [targetYM, setTargetYM] = useState(planBaseMonth);
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const codeMap = new Map(productMasters.map((p) => [p.code, p.name]));
+  const codeMap = new Map(productMasters.map((p) => [p.code, p.modelCode]));
 
   function parseCSV(text: string): PreviewRow[] {
     const cleaned = text.replace(/^\uFEFF/, "");
@@ -124,7 +125,7 @@ export default function InventoryImportTab() {
       {/* CSV仕様 */}
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
         <strong>CSV形式（truck-loaderと共通）：</strong> 1行目ヘッダー（省略可）、2列目以降：製品コード, 在庫数
-        <br />例： <code className="bg-blue-100 px-1 rounded">FHE-16AW1-G,530</code>
+        <br />例： <code className="bg-blue-100 px-1 rounded">1001,530</code>
       </div>
 
       {/* ドロップゾーン */}

@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProductMaster, OperatingDaysMaster, InventorySnapshot } from './masterTypes';
+import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster } from './masterTypes';
 import { products as defaultProducts } from './data';
 
 // デフォルト製品マスター（data.ts から生成）
+// ※ 製品コード（code）は空欄 → ユーザーが実際のコードを入力する
 const defaultProductMasters: ProductMaster[] = defaultProducts.map((p) => ({
-  code: p.manufacturingItemCode,
-  name: p.productName,
+  code: '',                           // 製品コード（数字コード）は未設定
+  modelCode: p.manufacturingItemCode, // 製造器種名（例: FHE-16AW1-G）
   primaryLine: p.primaryLine,
   planLot: p.planLot,
   reorderPoint: p.reorderPoint,
@@ -16,9 +17,13 @@ const defaultProductMasters: ProductMaster[] = defaultProducts.map((p) => ({
   active: true,
 }));
 
-// デフォルト稼働日マスター（2026年3〜8月）
+// デフォルト稼働日マスター（2026年1月〜2027年12月 = 24ヶ月）
 function buildDefaultOperatingDays(): OperatingDaysMaster[] {
-  const months = [202603, 202604, 202605, 202606, 202607, 202608];
+  const months: number[] = Array.from({ length: 24 }, (_, i) => {
+    const y = 2026 + Math.floor(i / 12);
+    const m = (i % 12) + 1;
+    return y * 100 + m;
+  });
   return months.map((ym) => {
     const year = Math.floor(ym / 100);
     const month = ym % 100;
@@ -32,7 +37,23 @@ function buildDefaultOperatingDays(): OperatingDaysMaster[] {
   });
 }
 
+// デフォルトラインマスター
+const defaultLineMasters: LineMaster[] = [
+  { lineNumber: 2, lineName: "ライン2", factoryName: "02工場", classification: "ブライツ" },
+  { lineNumber: 3, lineName: "ライン3", factoryName: "02工場", classification: "ブライツ" },
+  { lineNumber: 4, lineName: "ライン4", factoryName: "02工場", classification: "ブライツ" },
+  { lineNumber: 7, lineName: "ライン7", factoryName: "02工場", classification: "ブライツ" },
+];
+
 interface MasterStore {
+  // 計画基準月（全ページ共通）
+  planBaseMonth: number;
+  setPlanBaseMonth: (ym: number) => void;
+
+  // ラインマスター
+  lineMasters: LineMaster[];
+  updateLineMaster: (lineNumber: number, patch: Partial<LineMaster>) => void;
+
   // 製品マスター
   productMasters: ProductMaster[];
   addProduct: (p: ProductMaster) => void;
@@ -55,6 +76,19 @@ interface MasterStore {
 export const useMasterStore = create<MasterStore>()(
   persist(
     (set, get) => ({
+      // ── 計画基準月 ──
+      planBaseMonth: 202603,
+      setPlanBaseMonth: (ym: number) => set({ planBaseMonth: ym }),
+
+      // ── ラインマスター ──
+      lineMasters: defaultLineMasters,
+      updateLineMaster: (lineNumber, patch) =>
+        set((s) => ({
+          lineMasters: s.lineMasters.map((l) =>
+            l.lineNumber === lineNumber ? { ...l, ...patch } : l
+          ),
+        })),
+
       // ── 製品マスター ──
       productMasters: defaultProductMasters,
 

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { products, planMonths } from "@/lib/data";
+import { products, formatYearMonth, addMonths } from "@/lib/data";
+import { useMasterStore } from "@/lib/masterStore";
 import ProductSimCard from "./ProductSimCard";
-import { Info, Search, SlidersHorizontal } from "lucide-react";
-
-const START_YEAR_MONTH = planMonths[0]; // 202603
+import { Info, Search, SlidersHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function SimulationView() {
+  const { planBaseMonth, setPlanBaseMonth } = useMasterStore();
   const [search, setSearch] = useState("");
   const [filterLine, setFilterLine] = useState("all");
   const [defaultTargetMonths, setDefaultTargetMonths] = useState(1.5);
@@ -53,6 +53,26 @@ export default function SimulationView() {
 
       {/* コントロールバー */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap gap-3 items-center">
+        {/* 計画開始月 */}
+        <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+          <span className="text-xs text-blue-600 font-medium whitespace-nowrap">計画開始月:</span>
+          <button
+            onClick={() => setPlanBaseMonth(addMonths(planBaseMonth, -1))}
+            className="p-0.5 rounded hover:bg-blue-200 text-blue-500"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-sm font-bold text-blue-700 min-w-24 text-center">
+            {formatYearMonth(planBaseMonth)}
+          </span>
+          <button
+            onClick={() => setPlanBaseMonth(addMonths(planBaseMonth, 1))}
+            className="p-0.5 rounded hover:bg-blue-200 text-blue-500"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
         <div className="flex items-center gap-2 flex-1 min-w-48">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
@@ -97,9 +117,9 @@ export default function SimulationView() {
       <div className="space-y-6">
         {displayedProducts.map((p) => (
           <ProductSimCard
-            key={`${p.id}-${defaultTargetMonths}`}
+            key={`${p.id}-${defaultTargetMonths}-${planBaseMonth}`}
             product={p}
-            startYearMonth={START_YEAR_MONTH}
+            startYearMonth={planBaseMonth}
             defaultTargetMonths={defaultTargetMonths}
           />
         ))}

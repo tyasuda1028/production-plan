@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMasterStore } from "@/lib/masterStore";
-import { products, planMonths, formatYearMonth } from "@/lib/data";
+import { products, getPlanMonths, formatYearMonth } from "@/lib/data";
 import { TruckLoaderExportData } from "@/lib/masterTypes";
 import { ExternalLink, Download, Copy, Check, RefreshCw } from "lucide-react";
 
@@ -10,8 +10,9 @@ const TRUCK_LOADER_URL = "https://tyasuda1028-truck-loader.vercel.app";
 const API_BASE = typeof window !== "undefined" ? window.location.origin : "";
 
 export default function TruckLoaderTab() {
-  const { productMasters, getInventory } = useMasterStore();
-  const [selectedYM, setSelectedYM] = useState(planMonths[0]);
+  const { productMasters, getInventory, planBaseMonth } = useMasterStore();
+  const planMonths = getPlanMonths(planBaseMonth);
+  const [selectedYM, setSelectedYM] = useState(planBaseMonth);
   const [copied, setCopied] = useState(false);
 
   // truck-loaderへ渡すデータを組み立て
@@ -22,7 +23,7 @@ export default function TruckLoaderTab() {
       .filter((pm) => pm.active)
       .map((pm) => ({
         code: pm.code,
-        name: pm.name,
+        name: pm.modelCode,
         capacityPerPallet: pm.capacityPerPallet,
         palletType: pm.palletType,
         factoryCode: "F001",
@@ -31,7 +32,7 @@ export default function TruckLoaderTab() {
     // 生産計画：製品コードをキーにした月次計画数
     const productionPlan: Record<string, number> = {};
     productMasters.filter((pm) => pm.active).forEach((pm) => {
-      const p = products.find((x) => x.manufacturingItemCode === pm.code);
+      const p = products.find((x) => x.manufacturingItemCode === pm.modelCode);
       const mp = p?.monthlyPlans.find((m) => m.yearMonth === selectedYM);
       if (mp) productionPlan[pm.code] = mp.productionSchedule;
     });
@@ -42,7 +43,7 @@ export default function TruckLoaderTab() {
       if (inventory[pm.code] !== undefined) {
         inventoryStock[pm.code] = inventory[pm.code];
       } else {
-        const p = products.find((x) => x.manufacturingItemCode === pm.code);
+        const p = products.find((x) => x.manufacturingItemCode === pm.modelCode);
         if (p) inventoryStock[pm.code] = p.totalInventory;
       }
     });

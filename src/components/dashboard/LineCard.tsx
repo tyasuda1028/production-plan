@@ -2,6 +2,7 @@
 
 import { LineSummary, LineMonthlySummary } from "@/lib/types";
 import { formatYearMonth, getLineColor } from "@/lib/data";
+import { useMasterStore } from "@/lib/masterStore";
 import {
   BarChart,
   Bar,
@@ -45,8 +46,20 @@ function buildChartData(monthly: LineMonthlySummary[], metric: ChartMetric) {
 
 export default function LineCard({ line }: Props) {
   const [metric, setMetric] = useState<ChartMetric>("sales");
+  const lineMasters = useMasterStore((s) => s.lineMasters);
   const color = getLineColor(line.lineCode);
   const chartData = buildChartData(line.monthly, metric);
+
+  // このカードのライン群に対応するマスター情報を取得
+  const firstLine = line.lines[0];
+  const lineMaster = lineMasters.find((l) => l.lineNumber === firstLine);
+  // 分類（マスター設定があれば使用、なければ lineCode）
+  const classification = lineMaster?.classification ?? line.lineCode;
+  // ライン群のライン名一覧
+  const lineNames = line.lines
+    .map((n) => lineMasters.find((l) => l.lineNumber === n)?.lineName ?? `ライン${n}`)
+    .join(" / ");
+  const factoryName = lineMaster?.factoryName ?? `工場${line.factoryCode}`;
 
   const latest = line.monthly[line.monthly.length - 1];
   const salesDiff = latest.currSalesPlan - latest.prevSalesPlan;
@@ -62,10 +75,10 @@ export default function LineCard({ line }: Props) {
               className="w-3 h-3 rounded-full inline-block"
               style={{ background: color }}
             />
-            <h3 className="font-semibold text-gray-800">{line.lineCode}</h3>
+            <h3 className="font-semibold text-gray-800">{classification}</h3>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            工場 {line.factoryCode} | ライン {line.lines.join("/")} | 日産 {line.dailyCapacity.toLocaleString()} 台
+            {factoryName} | {lineNames} | 日産 {line.dailyCapacity.toLocaleString()} 台
           </p>
         </div>
         <div className="text-right">

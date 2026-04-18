@@ -99,15 +99,25 @@ export default function ProductSimCard({
   startYearMonth,
   defaultTargetMonths = 1.5,
 }: Props) {
-  // 7ヶ月目の販売計画（最終月の在庫月数計算用）
-  const month7Sales =
-    product.monthlyPlans[6]?.salesPlan ??
-    product.monthlyPlans[product.monthlyPlans.length - 1]?.salesPlan ??
-    0;
+  // startYearMonth に対応する月次計画の開始インデックスを検索
+  const startIdx = useMemo(() => {
+    const idx = product.monthlyPlans.findIndex((m) => m.yearMonth === startYearMonth);
+    return idx >= 0 ? idx : 0;
+  }, [product, startYearMonth]);
 
+  // 6ヶ月分の販売計画（startYearMonth 起点）
   const baseSalesPlans = useMemo(
-    () => product.monthlyPlans.slice(0, 6).map((m) => m.salesPlan),
-    [product]
+    () => product.monthlyPlans.slice(startIdx, startIdx + 6).map((m) => m.salesPlan),
+    [product, startIdx]
+  );
+
+  // 7ヶ月目の販売計画（最終月の在庫月数計算用）
+  const month7Sales = useMemo(
+    () =>
+      product.monthlyPlans[startIdx + 6]?.salesPlan ??
+      product.monthlyPlans[product.monthlyPlans.length - 1]?.salesPlan ??
+      0,
+    [product, startIdx]
   );
 
   const [initialInventory, setInitialInventory] = useState(

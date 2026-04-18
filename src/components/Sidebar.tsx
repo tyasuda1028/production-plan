@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
-import { LayoutDashboard, Table2, CalendarDays, Factory, FlaskConical, Settings } from "lucide-react";
+import { LayoutDashboard, Table2, CalendarDays, Factory, FlaskConical, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { useMasterStore } from "@/lib/masterStore";
+import { formatYearMonth, addMonths } from "@/lib/data";
 
 const navItems: { href: string; label: string; icon: React.ElementType; badge?: string; divider?: boolean }[] = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
@@ -15,6 +17,14 @@ const navItems: { href: string; label: string; icon: React.ElementType; badge?: 
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { planBaseMonth, setPlanBaseMonth } = useMasterStore();
+
+  function prevMonth() {
+    setPlanBaseMonth(addMonths(planBaseMonth, -1));
+  }
+  function nextMonth() {
+    setPlanBaseMonth(addMonths(planBaseMonth, 1));
+  }
 
   return (
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
@@ -54,8 +64,31 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-gray-200">
-        <p className="text-xs text-gray-400">2026年3月度 計画</p>
+      {/* 計画基準月セレクター */}
+      <div className="p-4 border-t border-gray-200 space-y-1.5">
+        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">計画基準月</p>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={prevMonth}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+            title="前月"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="flex-1 text-center text-xs font-semibold text-gray-700">
+            {formatYearMonth(planBaseMonth)}
+          </span>
+          <button
+            onClick={nextMonth}
+            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+            title="翌月"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-400">
+          〜 {formatYearMonth(addMonths(planBaseMonth, 5))}
+        </p>
       </div>
     </aside>
   );
