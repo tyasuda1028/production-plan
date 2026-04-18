@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
-import { LayoutDashboard, Table2, CalendarDays, Factory, FlaskConical } from "lucide-react";
+import { LayoutDashboard, Table2, CalendarDays, Factory, FlaskConical, Settings } from "lucide-react";
 
-const navItems: { href: string; label: string; icon: React.ElementType; badge?: string }[] = [
+const navItems: { href: string; label: string; icon: React.ElementType; badge?: string; divider?: boolean }[] = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { href: "/plan", label: "生産計画表", icon: Table2 },
   { href: "/schedule", label: "日割りスケジュール", icon: CalendarDays },
   { href: "/simulate", label: "生産計画立案", icon: FlaskConical, badge: "NEW" },
+  { href: "/masters", label: "マスター設定", icon: Settings, divider: true },
 ];
 
 export default function Sidebar() {
@@ -26,11 +27,13 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
-        {navItems.map(({ href, label, icon: Icon, badge }) => {
+        {navItems.map(({ href, label, icon: Icon, badge, divider }) => {
           const active = pathname === href;
           return (
+            <React.Fragment key={href}>
+            {divider && <div className="border-t border-gray-100 my-1" />}
             <Link
-              key={href}
+              key={`link-${href}`}
               href={href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
                 active
@@ -46,6 +49,7 @@ export default function Sidebar() {
                 </span>
               )}
             </Link>
+            </React.Fragment>
           );
         })}
       </nav>

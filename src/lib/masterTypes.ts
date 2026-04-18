@@ -1,0 +1,49 @@
+// ========== 製品マスター ==========
+export interface ProductMaster {
+  code: string;               // 製品コード（truck-loaderと共通キー）
+  name: string;               // 製品名
+  primaryLine: number;        // 主ライン
+  planLot: number;            // 計画ロット
+  reorderPoint: number;       // 発注点
+  capacityPerPallet: number;  // 個/パレット
+  palletType: 'P01' | 'P02' | 'P03';
+  productionMethod: string;   // B:在庫製品 / D:受注生産
+  active: boolean;            // 有効フラグ
+}
+
+export const PALLET_TYPES: Record<string, { name: string; size: string }> = {
+  P01: { name: '標準', size: '1100mm' },
+  P02: { name: '大型', size: '1200mm' },
+  P03: { name: '軽量', size: '800mm' },
+};
+
+// ========== 稼働日マスター ==========
+export interface OperatingDaysMaster {
+  yearMonth: number;       // YYYYMM
+  operatingDates: number[]; // 稼働する日付のリスト [1, 2, 4, 7, ...]
+}
+
+// ========== 在庫スナップショット ==========
+export interface InventorySnapshot {
+  yearMonth: number;
+  productCode: string;
+  quantity: number;
+  updatedAt: string; // ISO date string
+}
+
+// ========== Truck-Loader 連携型 ==========
+export interface TruckLoaderExportData {
+  exportedAt: string;
+  sourceApp: string;
+  products: TruckLoaderProduct[];
+  productionPlan: Record<string, number>;  // productCode → 月次計画数
+  inventoryStock: Record<string, number>;  // productCode → 在庫数
+}
+
+export interface TruckLoaderProduct {
+  code: string;
+  name: string;
+  capacityPerPallet: number;
+  palletType: string;
+  factoryCode: string;
+}
