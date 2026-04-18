@@ -25,6 +25,13 @@ export interface LineMaster {
   classification: string;  // 分類（例: ブライツ）
 }
 
+// ========== 販売計画オーバーライド ==========
+export interface SalesPlanOverride {
+  productId: string;   // Product.id (P001 etc.)
+  yearMonth: number;   // YYYYMM
+  salesPlan: number;
+}
+
 // ========== 稼働日マスター ==========
 export interface OperatingDaysMaster {
   yearMonth: number;       // YYYYMM

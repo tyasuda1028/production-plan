@@ -27,7 +27,25 @@ const METHOD_COLORS: Record<string, string> = {
 export default function PlanTable() {
   const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
   const lineMasters = useMasterStore((s) => s.lineMasters);
+  const salesPlanOverrides = useMasterStore((s) => s.salesPlanOverrides);
   const planMonths = getPlanMonths(planBaseMonth);
+
+  const overrideMap = useMemo(() =>
+    new Map(salesPlanOverrides.map((o) => [`${o.productId}:${o.yearMonth}`, o.salesPlan])),
+    [salesPlanOverrides]
+  );
+
+  function applyOverride(p: Product, mp: MonthlyPlan): MonthlyPlan {
+    const override = overrideMap.get(`${p.id}:${mp.yearMonth}`);
+    if (override === undefined) return mp;
+    const salesPlan = override;
+    const requiredProduction = Math.round(salesPlan * 1.05);
+    const surplusDeficit = mp.productionSchedule - requiredProduction;
+    const monthEndInventoryMonths = salesPlan > 0
+      ? parseFloat((mp.monthEndInventory / salesPlan).toFixed(1))
+      : 0;
+    return { ...mp, salesPlan, requiredProduction, surplusDeficit, monthEndInventoryMonths };
+  }
 
   const [search, setSearch] = useState("");
   const [filterClassification, setFilterClassification] = useState("all");
@@ -76,8 +94,10 @@ export default function PlanTable() {
     setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  const plan = (p: Product): MonthlyPlan | undefined =>
-    p.monthlyPlans.find((m) => m.yearMonth === selectedMonth);
+  const plan = (p: Product): MonthlyPlan | undefined => {
+    const mp = p.monthlyPlans.find((m) => m.yearMonth === selectedMonth);
+    return mp ? applyOverride(p, mp) : undefined;
+  };
 
   return (
     <div className="space-y-4">
@@ -272,7 +292,8 @@ export default function PlanTable() {
                                   <tr key={label}>
                                     <td className="pr-4 py-1 text-gray-500 whitespace-nowrap">{label}</td>
                                     {planMonths.map((m) => {
-                                      const mplan = p.monthlyPlans.find((x) => x.yearMonth === m);
+                                      const raw = p.monthlyPlans.find((x) => x.yearMonth === m);
+                                      const mplan = raw ? applyOverride(p, raw) : undefined;
                                       const val = mplan ? mplan[key] : null;
                                       return (
                                         <td key={m} className={`text-right pr-4 py-1 whitespace-nowrap ${m === selectedMonth ? "font-semibold text-blue-800" : "text-gray-700"}`}>

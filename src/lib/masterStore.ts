@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster } from './masterTypes';
+import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, SalesPlanOverride } from './masterTypes';
 import { products as defaultProducts } from './data';
 
 // デフォルト製品マスター（data.ts から生成）
@@ -71,6 +71,12 @@ interface MasterStore {
   upsertInventory: (snap: InventorySnapshot) => void;
   importInventoryCSV: (yearMonth: number, rows: { code: string; quantity: number }[]) => void;
   getInventory: (yearMonth: number) => Record<string, number>;
+
+  // 販売計画オーバーライド
+  salesPlanOverrides: SalesPlanOverride[];
+  setSalesPlanOverride: (productId: string, yearMonth: number, salesPlan: number) => void;
+  clearSalesPlanOverride: (productId: string, yearMonth: number) => void;
+  getSalesPlanOverride: (productId: string, yearMonth: number) => number | undefined;
 }
 
 export const useMasterStore = create<MasterStore>()(
@@ -164,6 +170,29 @@ export const useMasterStore = create<MasterStore>()(
         );
         return Object.fromEntries(snaps.map((s) => [s.productCode, s.quantity]));
       },
+
+      // ── 販売計画オーバーライド ──
+      salesPlanOverrides: [],
+
+      setSalesPlanOverride: (productId, yearMonth, salesPlan) =>
+        set((s) => {
+          const filtered = s.salesPlanOverrides.filter(
+            (o) => !(o.productId === productId && o.yearMonth === yearMonth)
+          );
+          return { salesPlanOverrides: [...filtered, { productId, yearMonth, salesPlan }] };
+        }),
+
+      clearSalesPlanOverride: (productId, yearMonth) =>
+        set((s) => ({
+          salesPlanOverrides: s.salesPlanOverrides.filter(
+            (o) => !(o.productId === productId && o.yearMonth === yearMonth)
+          ),
+        })),
+
+      getSalesPlanOverride: (productId, yearMonth) =>
+        get().salesPlanOverrides.find(
+          (o) => o.productId === productId && o.yearMonth === yearMonth
+        )?.salesPlan,
     }),
     {
       name: 'production-plan-masters',
