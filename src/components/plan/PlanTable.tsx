@@ -3,11 +3,11 @@
 import { useState, useMemo, useEffect } from "react";
 import { products, getPlanMonths, formatYearMonth } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
-import { Product, MonthlyPlan } from "@/lib/types";
+import { MonthlyPlan, Product } from "@/lib/types";
+import { useLeveledPlans, LeveledPlan } from "@/lib/useLeveledPlans";
 import { ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 
 type ExpandedRows = Record<string, boolean>;
-type LeveledPlan = MonthlyPlan & { dailyQuantity: number };
 
 function SurplusCell({ value }: { value: number }) {
   if (value > 0) return <span className="text-blue-600 font-medium">+{value.toLocaleString()}</span>;
@@ -25,106 +25,13 @@ const METHOD_COLORS: Record<string, string> = {
   "D:受注生産": "bg-purple-50 text-purple-700",
 };
 
-/**
- * 均等日量計画を算出する。
- * planMonths（6ヶ月）を前半3ヶ月・後半3ヶ月に分け、
- * 各グループの合計生産必要数を合計稼働日数で割った日量を基に
- * 月別生産予定数を決定する。在庫は前月末在庫から累積計算。
- */
-function buildLeveledPlan(
-  p: Product,
-  planMonths: number[],
-  opDaysCount: Map<number, number>,
-  overrideMap: Map<string, number>
-): Map<number, LeveledPlan> {
-  const DEFAULT_OP_DAYS = 20;
-
-  // 販売計画オーバーライドを適用したベース計画
-  const basePlans: MonthlyPlan[] = planMonths.map((ym) => {
-    const mp = p.monthlyPlans.find((m) => m.yearMonth === ym) ?? {
-      yearMonth: ym, salesPlan: 0, targetInventoryMonths: 1.5,
-      productionSchedule: 0, requiredProduction: 0, surplusDeficit: 0,
-      planAdjustment: 0, monthEndInventory: 0, monthEndInventoryMonths: 0,
-    };
-    const override = overrideMap.get(`${p.id}:${ym}`);
-    if (override !== undefined) {
-      const salesPlan = override;
-      const requiredProduction = Math.round(salesPlan * 1.05);
-      return { ...mp, salesPlan, requiredProduction };
-    }
-    return mp;
-  });
-
-  const opDays = planMonths.map((ym) => opDaysCount.get(ym) ?? DEFAULT_OP_DAYS);
-
-  // 前半3ヶ月の均等日量レート
-  const req1  = basePlans.slice(0, 3).reduce((s, m) => s + m.requiredProduction, 0);
-  const days1 = opDays.slice(0, 3).reduce((s, d) => s + d, 0);
-  const rate1 = days1 > 0 ? req1 / days1 : 0;
-
-  // 後半3ヶ月の均等日量レート
-  const req2  = basePlans.slice(3).reduce((s, m) => s + m.requiredProduction, 0);
-  const days2 = opDays.slice(3).reduce((s, d) => s + d, 0);
-  const rate2 = days2 > 0 ? req2 / days2 : 0;
-
-  const rates = [rate1, rate1, rate1, rate2, rate2, rate2];
-
-  const result = new Map<number, LeveledPlan>();
-  let prevInv = p.lastMonthInventory;
-
-  basePlans.forEach((mp, i) => {
-    const productionSchedule      = Math.round(rates[i] * opDays[i]);
-    const surplusDeficit          = productionSchedule - mp.requiredProduction;
-    const planAdjustment          = surplusDeficit < 0 ? Math.abs(surplusDeficit) : 0;
-    const monthEndInventory       = prevInv + productionSchedule - mp.salesPlan;
-    const monthEndInventoryMonths = mp.salesPlan > 0
-      ? parseFloat((monthEndInventory / mp.salesPlan).toFixed(1))
-      : 0;
-    const dailyQuantity = opDays[i] > 0 ? Math.round(productionSchedule / opDays[i]) : 0;
-
-    result.set(mp.yearMonth, {
-      ...mp,
-      productionSchedule,
-      surplusDeficit,
-      planAdjustment,
-      monthEndInventory,
-      monthEndInventoryMonths,
-      dailyQuantity,
-    });
-
-    prevInv = monthEndInventory;
-  });
-
-  return result;
-}
-
 export default function PlanTable() {
-  const planBaseMonth       = useMasterStore((s) => s.planBaseMonth);
-  const lineMasters         = useMasterStore((s) => s.lineMasters);
-  const salesPlanOverrides  = useMasterStore((s) => s.salesPlanOverrides);
-  const masterOperatingDays = useMasterStore((s) => s.operatingDays);
-  const planMonths = getPlanMonths(planBaseMonth);
+  const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
+  const lineMasters   = useMasterStore((s) => s.lineMasters);
+  const planMonths    = getPlanMonths(planBaseMonth);
 
-  const overrideMap = useMemo(() =>
-    new Map(salesPlanOverrides.map((o) => [`${o.productId}:${o.yearMonth}`, o.salesPlan])),
-    [salesPlanOverrides]
-  );
-
-  // 稼働日数マップ (yearMonth → 稼働日数)
-  const opDaysCount = useMemo(() => {
-    const map = new Map<number, number>();
-    masterOperatingDays.forEach((o) => map.set(o.yearMonth, o.operatingDates.length));
-    return map;
-  }, [masterOperatingDays]);
-
-  // 全品目の均等日量計画を計算
-  const leveledPlansMap = useMemo(() => {
-    const result = new Map<string, Map<number, LeveledPlan>>();
-    products.forEach((p) => {
-      result.set(p.id, buildLeveledPlan(p, planMonths, opDaysCount, overrideMap));
-    });
-    return result;
-  }, [planMonths, opDaysCount, overrideMap]);
+  // 共有フックから均等日量計画を取得
+  const leveledPlansMap = useLeveledPlans();
 
   const [search, setSearch] = useState("");
   const [filterClassification, setFilterClassification] = useState("all");

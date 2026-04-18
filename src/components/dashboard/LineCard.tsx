@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { LineSummary } from "@/lib/types";
 import { products, addMonths, getPlanMonths, formatYearMonth, getLineColor } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
+import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import {
   ComposedChart,
   LineChart,
@@ -32,6 +33,9 @@ export default function LineCard({ line }: Props) {
   const salesOverrides  = useMasterStore((s) => s.salesPlanOverrides);
   const masterOpDays    = useMasterStore((s) => s.operatingDays);
   const lineMasters     = useMasterStore((s) => s.lineMasters);
+
+  // 均等日量計画（全品目）
+  const leveledPlansMap = useLeveledPlans();
 
   const color = getLineColor(line.lineCode);
 
@@ -80,12 +84,20 @@ export default function LineCard({ line }: Props) {
       let totalSchedule = 0;
 
       lineProducts.forEach((p) => {
-        const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
-        if (!mp) return;
-        const override = overrideMap.get(`${p.id}:${ym}`);
-        totalSales    += override ?? mp.salesPlan;
-        totalEndInv   += mp.monthEndInventory;
-        totalSchedule += mp.productionSchedule;
+        // 計画6ヶ月は均等日量計画から、前月など範囲外は静的データにフォールバック
+        const leveled = leveledPlansMap.get(p.id)?.get(ym);
+        if (leveled) {
+          totalSales    += leveled.salesPlan;
+          totalEndInv   += leveled.monthEndInventory;
+          totalSchedule += leveled.productionSchedule;
+        } else {
+          const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
+          if (!mp) return;
+          const override = overrideMap.get(`${p.id}:${ym}`);
+          totalSales    += override ?? mp.salesPlan;
+          totalEndInv   += mp.monthEndInventory;
+          totalSchedule += mp.productionSchedule;
+        }
       });
 
       const opDays     = masterOpDays.find((o) => o.yearMonth === ym)?.operatingDates.length ?? 20;
@@ -103,7 +115,7 @@ export default function LineCard({ line }: Props) {
         isCurrent:             ym === planBaseMonth,
       };
     }),
-    [displayMonths, lineProducts, overrideMap, masterOpDays, planBaseMonth]
+    [displayMonths, lineProducts, leveledPlansMap, overrideMap, masterOpDays, planBaseMonth]
   );
 
   // 表示月（planBaseMonth）のKPI

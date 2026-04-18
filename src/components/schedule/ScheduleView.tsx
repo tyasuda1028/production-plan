@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { products, formatYearMonth, getPlanMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { Product } from "@/lib/types";
+import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import { Download, Database } from "lucide-react";
 
 const GROUP_COLORS = [
@@ -32,6 +33,9 @@ export default function ScheduleView() {
   const [search, setSearch] = useState("");
   const [selectedYM, setSelectedYM] = useState(planBaseMonth);
 
+  // 均等日量計画（全品目）
+  const leveledPlansMap = useLeveledPlans();
+
   useMemo(() => { setSelectedYM(planBaseMonth); }, [planBaseMonth]);
 
   const monthDays = useMemo(() => buildMonthDays(selectedYM), [selectedYM]);
@@ -50,6 +54,10 @@ export default function ScheduleView() {
   }
 
   function getDailyQty(p: Product): number {
+    // 計画6ヶ月は均等日量計画から取得
+    const leveled = leveledPlansMap.get(p.id)?.get(selectedYM);
+    if (leveled) return leveled.dailyQuantity;
+    // 範囲外の月は静的データにフォールバック
     const idx = getMonthPlanIdx(p);
     const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
     if (!mp || operatingDayNums.length === 0) return 0;
@@ -116,10 +124,13 @@ export default function ScheduleView() {
         const lineDayTotals: number[] = mDays.map(() => 0);
 
         lps.forEach((p) => {
+          // 均等日量計画を使用（なければ静的データにフォールバック）
+          const leveled = leveledPlansMap.get(p.id)?.get(ym);
           const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
-          const dq = mp && opNums.length > 0
-            ? Math.round(mp.productionSchedule / opNums.length)
-            : 0;
+          const prodSchedule = leveled?.productionSchedule ?? mp?.productionSchedule ?? 0;
+          const dq = leveled
+            ? leveled.dailyQuantity
+            : (mp && opNums.length > 0 ? Math.round(mp.productionSchedule / opNums.length) : 0);
           const dayValues = mDays.map(({ day }, di) => {
             const v = isOp(day) ? dq : 0;
             lineDayTotals[di] += v;
@@ -128,7 +139,7 @@ export default function ScheduleView() {
           allRows.push([
             lm.lineName,
             p.manufacturingItemCode,
-            mp ? String(mp.productionSchedule) : "0",
+            String(prodSchedule),
             ...dayValues.map(String),
             String(dayValues.reduce((s, v) => s + v, 0)),
           ]);
@@ -169,11 +180,17 @@ export default function ScheduleView() {
         : mDays.filter((d) => d.dow !== 0 && d.dow !== 6).map((d) => d.day);
       const dqMap = new Map<string, number>();
       products.forEach((p) => {
-        const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
-        const dq = mp && opNums.length > 0
-          ? Math.round(mp.productionSchedule / opNums.length)
-          : 0;
-        dqMap.set(p.id, dq);
+        // 均等日量計画を優先、なければ静的データにフォールバック
+        const leveled = leveledPlansMap.get(p.id)?.get(ym);
+        if (leveled) {
+          dqMap.set(p.id, leveled.dailyQuantity);
+        } else {
+          const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
+          const dq = mp && opNums.length > 0
+            ? Math.round(mp.productionSchedule / opNums.length)
+            : 0;
+          dqMap.set(p.id, dq);
+        }
       });
       return { ym, opNums, dqMap };
     });
@@ -329,8 +346,10 @@ export default function ScheduleView() {
                 </thead>
                 <tbody>
                   {lineProducts.map((p) => {
+                    const leveled = leveledPlansMap.get(p.id)?.get(selectedYM);
                     const idx = getMonthPlanIdx(p);
                     const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
+                    const productionSchedule = leveled?.productionSchedule ?? mp?.productionSchedule;
                     const dq = getDailyQty(p);
                     const rowTotal = dq * operatingDayNums.length;
 
@@ -342,7 +361,7 @@ export default function ScheduleView() {
                           </div>
                         </td>
                         <td className="px-2 py-2 text-right font-medium text-blue-700 border-r border-gray-200">
-                          {mp ? mp.productionSchedule.toLocaleString() : "-"}
+                          {productionSchedule != null ? productionSchedule.toLocaleString() : "-"}
                         </td>
                         {monthDays.map(({ day }) => {
                           const op = isOperating(day);
