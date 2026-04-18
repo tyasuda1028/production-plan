@@ -134,7 +134,7 @@ export default function ScheduleView() {
           <table className="text-xs border-collapse min-w-max">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40">品目名</th>
+                <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40">製造器種名</th>
                 <th className="px-2 py-2 text-center text-gray-500 font-medium whitespace-nowrap border-r border-gray-100 min-w-12">L</th>
                 <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-16">月計画</th>
                 {monthDays.map(({ day, dow }) => {
@@ -165,8 +165,7 @@ export default function ScheduleView() {
                 return (
                   <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap border-r border-gray-200">
-                      <div className="font-medium text-gray-800 text-xs leading-tight">{p.productName}</div>
-                      <div className="text-gray-400 font-mono text-[10px]">{p.manufacturingItemCode}</div>
+                      <div className="font-medium text-gray-800 text-xs font-mono leading-tight">{p.manufacturingItemCode}</div>
                     </td>
                     <td className="px-2 py-2 text-center border-r border-gray-100">
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${LINE_COLORS[p.primaryLine] ?? "bg-gray-100 text-gray-600"}`}>
