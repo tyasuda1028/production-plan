@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { products, formatYearMonth } from "@/lib/data";
+import { products, formatYearMonth, getPlanMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { Product } from "@/lib/types";
 import { Download } from "lucide-react";
@@ -86,51 +86,71 @@ export default function ScheduleView() {
   const totalFiltered = lineGroups.reduce((s, g) => s + g.lineProducts.length, 0);
 
   function handleCsvExport() {
-    const ymStr = String(selectedYM);
-    const dayHeaders = monthDays.map(({ day, dow }) => `${day}(${DOW_LABELS[dow]})`);
-    const rows: string[][] = [
-      ["ライン", "製造器種名", "月計画（台）", ...dayHeaders, "合計"],
-    ];
+    const exportMonths = getPlanMonths(planBaseMonth); // 先6ヶ月
+    const allRows: string[][] = [];
 
-    lineGroups.forEach(({ lineMaster, lineProducts }) => {
-      const lineDayTotals: number[] = monthDays.map(() => 0);
+    exportMonths.forEach((ym, monthIdx) => {
+      const mDays = buildMonthDays(ym);
 
-      lineProducts.forEach((p) => {
-        const dq = getDailyQty(p);
-        const idx = getMonthPlanIdx(p);
-        const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
-        const dayValues = monthDays.map(({ day }, di) => {
-          const v = isOperating(day) ? dq : 0;
-          lineDayTotals[di] += v;
-          return v;
+      // 稼働日取得
+      const masterEntry = masterOperatingDays.find((o) => o.yearMonth === ym);
+      const opNums = masterEntry
+        ? masterEntry.operatingDates
+        : mDays.filter((d) => d.dow !== 0 && d.dow !== 6).map((d) => d.day);
+      const isOp = (day: number) => opNums.includes(day);
+
+      // 月区切り
+      if (monthIdx > 0) allRows.push([]);
+      const ymStr = String(ym);
+      allRows.push([`■ ${ymStr.slice(0, 4)}年${ymStr.slice(4)}月（稼働日 ${opNums.length}日）`]);
+
+      // 列ヘッダー
+      const dayHeaders = mDays.map(({ day, dow }) => `${day}(${DOW_LABELS[dow]})`);
+      allRows.push(["ライン", "製造器種名", "月計画（台）", ...dayHeaders, "合計"]);
+
+      // ライン別データ
+      lineMasters.forEach((lm) => {
+        const lps = products.filter((p) => p.primaryLine === lm.lineNumber);
+        if (lps.length === 0) return;
+
+        const lineDayTotals: number[] = mDays.map(() => 0);
+
+        lps.forEach((p) => {
+          const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
+          const dq = mp && opNums.length > 0
+            ? Math.round(mp.productionSchedule / opNums.length)
+            : 0;
+          const dayValues = mDays.map(({ day }, di) => {
+            const v = isOp(day) ? dq : 0;
+            lineDayTotals[di] += v;
+            return v;
+          });
+          allRows.push([
+            lm.lineName,
+            p.manufacturingItemCode,
+            mp ? String(mp.productionSchedule) : "0",
+            ...dayValues.map(String),
+            String(dayValues.reduce((s, v) => s + v, 0)),
+          ]);
         });
-        const rowTotal = dayValues.reduce((s, v) => s + v, 0);
-        rows.push([
-          lineMaster.lineName,
-          p.manufacturingItemCode,
-          mp ? String(mp.productionSchedule) : "0",
-          ...dayValues.map(String),
-          String(rowTotal),
-        ]);
-      });
 
-      const lineTotal = lineDayTotals.reduce((s, v) => s + v, 0);
-      rows.push([
-        `【${lineMaster.lineName} 合計】`,
-        "",
-        "",
-        ...lineDayTotals.map(String),
-        String(lineTotal),
-      ]);
-      rows.push([]);
+        // ライン合計行
+        allRows.push([
+          `【${lm.lineName} 合計】`, "", "",
+          ...lineDayTotals.map(String),
+          String(lineDayTotals.reduce((s, v) => s + v, 0)),
+        ]);
+        allRows.push([]);
+      });
     });
 
-    const csv = "\uFEFF" + rows.map((r) => r.join(",")).join("\n");
+    const base = String(planBaseMonth);
+    const csv = "\uFEFF" + allRows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `日割りスケジュール_${ymStr.slice(0, 4)}年${ymStr.slice(4)}月.csv`;
+    a.download = `日割りスケジュール_${base.slice(0, 4)}年${base.slice(4)}月〜先6ヶ月.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -162,7 +182,7 @@ export default function ScheduleView() {
             className="flex items-center gap-1.5 text-xs bg-green-600 text-white rounded px-3 py-1.5 hover:bg-green-700 whitespace-nowrap"
           >
             <Download className="w-3.5 h-3.5" />
-            CSV出力
+            先6ヶ月 CSV出力
           </button>
         </div>
         <span className="text-xs text-gray-400">
