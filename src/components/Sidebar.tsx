@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Table2, CalendarDays, Factory } from "lucide-react";
+import React from "react";
+import { LayoutDashboard, Table2, CalendarDays, Factory, FlaskConical } from "lucide-react";
 
-const navItems = [
+const navItems: { href: string; label: string; icon: React.ElementType; badge?: string }[] = [
   { href: "/", label: "ダッシュボード", icon: LayoutDashboard },
   { href: "/plan", label: "生産計画表", icon: Table2 },
   { href: "/schedule", label: "日割りスケジュール", icon: CalendarDays },
+  { href: "/simulate", label: "生産計画立案", icon: FlaskConical, badge: "NEW" },
 ];
 
 export default function Sidebar() {
@@ -24,7 +26,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon, badge }) => {
           const active = pathname === href;
           return (
             <Link
@@ -37,7 +39,12 @@ export default function Sidebar() {
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {badge && (
+                <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-medium">
+                  {badge}
+                </span>
+              )}
             </Link>
           );
         })}
