@@ -1,6 +1,6 @@
 // ========== 製品マスター ==========
 export interface ProductMaster {
-  code: string;               // 製品コード（truck-loaderと共通キー・任意）
+  code: string;               // 製品コード（任意）
   modelCode: string;          // 製造器種名（例: FHE-16AW1-G）
   primaryLine: number;        // 主ライン
   planLot: number;            // 計画ロット
@@ -47,19 +47,3 @@ export interface InventorySnapshot {
   updatedAt: string; // ISO date string
 }
 
-// ========== Truck-Loader 連携型 ==========
-export interface TruckLoaderExportData {
-  exportedAt: string;
-  sourceApp: string;
-  products: TruckLoaderProduct[];
-  productionPlan: Record<string, number>;  // productCode → 月次計画数
-  inventoryStock: Record<string, number>;  // productCode → 在庫数
-}
-
-export interface TruckLoaderProduct {
-  code: string;
-  name: string;
-  capacityPerPallet: number;
-  palletType: string;
-  factoryCode: string;
-}
