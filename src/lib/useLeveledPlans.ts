@@ -16,10 +16,11 @@ export function buildLeveledPlanForProduct(
   p: Product,
   planMonths: number[],
   opDaysCount: Map<number, number>,
-  overrideMap: Map<string, number>
+  overrideMap: Map<string, number>,
+  simInputsMap?: Map<string, Map<number, { salesPlan: number; targetInventoryMonths: number }>>
 ): Map<number, LeveledPlan> {
   // 販売計画オーバーライドを適用したベース計画
-  const basePlans: MonthlyPlan[] = planMonths.map((ym) => {
+  let basePlans: MonthlyPlan[] = planMonths.map((ym) => {
     const mp = p.monthlyPlans.find((m) => m.yearMonth === ym) ?? {
       yearMonth: ym,
       salesPlan: 0,
@@ -39,6 +40,29 @@ export function buildLeveledPlanForProduct(
     }
     return mp;
   });
+
+  const simForProduct = simInputsMap?.get(p.id);
+  if (simForProduct && simForProduct.size > 0) {
+    let prevInvChain = p.lastMonthInventory;
+    basePlans = basePlans.map((mp, i) => {
+      const si = simForProduct.get(mp.yearMonth);
+      if (!si) {
+        // No sim input for this month – use existing mp as-is for chain continuity
+        prevInvChain = prevInvChain + mp.requiredProduction - mp.salesPlan;
+        return mp;
+      }
+      // Next month's sales plan (for targetInventoryQty calculation)
+      const nextSalesPlan =
+        i + 1 < basePlans.length
+          ? (simForProduct.get(basePlans[i + 1].yearMonth)?.salesPlan ?? basePlans[i + 1].salesPlan)
+          : p.monthlyPlans.find((m) => m.yearMonth > mp.yearMonth)?.salesPlan ?? 0;
+      const targetInventoryQty = Math.round(si.targetInventoryMonths * nextSalesPlan);
+      const requiredProduction = Math.max(0, targetInventoryQty + si.salesPlan - prevInvChain);
+      // Estimate next prevInv using requiredProduction (before leveling)
+      prevInvChain = prevInvChain + requiredProduction - si.salesPlan;
+      return { ...mp, salesPlan: si.salesPlan, requiredProduction };
+    });
+  }
 
   const opDays = planMonths.map((ym) => opDaysCount.get(ym) ?? DEFAULT_OP_DAYS);
 
@@ -90,6 +114,7 @@ export function useLeveledPlans(): Map<string, Map<number, LeveledPlan>> {
   const planBaseMonth       = useMasterStore((s) => s.planBaseMonth);
   const salesPlanOverrides  = useMasterStore((s) => s.salesPlanOverrides);
   const masterOperatingDays = useMasterStore((s) => s.operatingDays);
+  const simMonthOverrides   = useMasterStore((s) => s.simMonthOverrides);
 
   const planMonths = useMemo(() => getPlanMonths(planBaseMonth), [planBaseMonth]);
 
@@ -104,11 +129,23 @@ export function useLeveledPlans(): Map<string, Map<number, LeveledPlan>> {
     return map;
   }, [masterOperatingDays]);
 
+  const simInputsMap = useMemo(() => {
+    const map = new Map<string, Map<number, { salesPlan: number; targetInventoryMonths: number }>>();
+    simMonthOverrides.forEach((o) => {
+      if (!map.has(o.productId)) map.set(o.productId, new Map());
+      map.get(o.productId)!.set(o.yearMonth, {
+        salesPlan: o.salesPlan,
+        targetInventoryMonths: o.targetInventoryMonths,
+      });
+    });
+    return map;
+  }, [simMonthOverrides]);
+
   return useMemo(() => {
     const result = new Map<string, Map<number, LeveledPlan>>();
     products.forEach((p) => {
-      result.set(p.id, buildLeveledPlanForProduct(p, planMonths, opDaysCount, overrideMap));
+      result.set(p.id, buildLeveledPlanForProduct(p, planMonths, opDaysCount, overrideMap, simInputsMap));
     });
     return result;
-  }, [planMonths, opDaysCount, overrideMap]);
+  }, [planMonths, opDaysCount, overrideMap, simInputsMap]);
 }

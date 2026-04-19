@@ -47,3 +47,11 @@ export interface InventorySnapshot {
   updatedAt: string; // ISO date string
 }
 
+// ========== シミュレーション月別入力オーバーライド ==========
+export interface SimMonthOverride {
+  productId: string;
+  yearMonth: number;
+  salesPlan: number;
+  targetInventoryMonths: number;
+}
+

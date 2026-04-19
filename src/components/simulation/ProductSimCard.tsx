@@ -21,6 +21,7 @@ import {
   ProductSimState,
 } from "@/lib/simulation";
 import { Product } from "@/lib/types";
+import { useMasterStore } from "@/lib/masterStore";
 import { RotateCcw, AlertTriangle } from "lucide-react";
 
 interface Props {
@@ -138,13 +139,31 @@ export default function ProductSimCard({
     [product, startIdx]
   );
 
+  const { setSimMonthInputs, simMonthOverrides } = useMasterStore();
+
+  const storedInputs = useMemo(() => {
+    const stored = simMonthOverrides
+      .filter((o) => o.productId === product.id)
+      .sort((a, b) => a.yearMonth - b.yearMonth);
+    if (stored.length === 6) {
+      return stored.map(({ yearMonth, salesPlan, targetInventoryMonths }) => ({
+        yearMonth, salesPlan, targetInventoryMonths,
+      }));
+    }
+    return null;
+  }, [simMonthOverrides, product.id]);
+
   const [initialInventory, setInitialInventory] = useState(
     product.lastMonthInventory
   );
   const [inputs, setInputs] = useState<MonthInput[]>(() =>
-    buildDefaultInputs(startYearMonth, baseSalesPlans, defaultTargetMonths)
+    storedInputs ?? buildDefaultInputs(startYearMonth, baseSalesPlans, defaultTargetMonths)
   );
   const [showChart, setShowChart] = useState(true);
+
+  useEffect(() => {
+    setSimMonthInputs(product.id, inputs);
+  }, [inputs, product.id, setSimMonthInputs]);
 
   const state: ProductSimState = useMemo(
     () => ({
@@ -170,10 +189,10 @@ export default function ProductSimCard({
   );
 
   const reset = () => {
+    const defaultInputs = buildDefaultInputs(startYearMonth, baseSalesPlans, defaultTargetMonths);
     setInitialInventory(product.lastMonthInventory);
-    setInputs(
-      buildDefaultInputs(startYearMonth, baseSalesPlans, defaultTargetMonths)
-    );
+    setInputs(defaultInputs);
+    setSimMonthInputs(product.id, defaultInputs);
   };
 
   const hasShortage = results.some((r) => r.isShortage);

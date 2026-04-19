@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, SalesPlanOverride } from './masterTypes';
+import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, SalesPlanOverride, SimMonthOverride } from './masterTypes';
 import { products as defaultProducts } from './data';
 
 // デフォルト製品マスター（data.ts から生成）
@@ -80,6 +80,12 @@ interface MasterStore {
   setSalesPlanOverride: (productId: string, yearMonth: number, salesPlan: number) => void;
   clearSalesPlanOverride: (productId: string, yearMonth: number) => void;
   getSalesPlanOverride: (productId: string, yearMonth: number) => number | undefined;
+
+  // シミュレーション入力オーバーライド
+  simMonthOverrides: SimMonthOverride[];
+  setSimMonthOverride: (productId: string, yearMonth: number, field: 'salesPlan' | 'targetInventoryMonths', value: number) => void;
+  setSimMonthInputs: (productId: string, inputs: Array<{yearMonth: number; salesPlan: number; targetInventoryMonths: number}>) => void;
+  clearSimMonthOverrides: (productId: string) => void;
 }
 
 export const useMasterStore = create<MasterStore>()(
@@ -215,6 +221,43 @@ export const useMasterStore = create<MasterStore>()(
         get().salesPlanOverrides.find(
           (o) => o.productId === productId && o.yearMonth === yearMonth
         )?.salesPlan,
+
+      // ── シミュレーション入力オーバーライド ──
+      simMonthOverrides: [],
+
+      setSimMonthOverride: (productId, yearMonth, field, value) =>
+        set((s) => {
+          const existing = s.simMonthOverrides.find(
+            (o) => o.productId === productId && o.yearMonth === yearMonth
+          );
+          if (existing) {
+            return {
+              simMonthOverrides: s.simMonthOverrides.map((o) =>
+                o.productId === productId && o.yearMonth === yearMonth
+                  ? { ...o, [field]: value }
+                  : o
+              ),
+            };
+          }
+          return {
+            simMonthOverrides: [
+              ...s.simMonthOverrides,
+              { productId, yearMonth, salesPlan: 0, targetInventoryMonths: 1.5, [field]: value },
+            ],
+          };
+        }),
+
+      setSimMonthInputs: (productId, inputs) =>
+        set((s) => {
+          const others = s.simMonthOverrides.filter((o) => o.productId !== productId);
+          const newEntries = inputs.map((inp) => ({ productId, ...inp }));
+          return { simMonthOverrides: [...others, ...newEntries] };
+        }),
+
+      clearSimMonthOverrides: (productId) =>
+        set((s) => ({
+          simMonthOverrides: s.simMonthOverrides.filter((o) => o.productId !== productId),
+        })),
     }),
     {
       name: 'production-plan-masters',
