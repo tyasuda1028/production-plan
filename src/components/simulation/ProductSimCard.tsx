@@ -252,9 +252,6 @@ export default function ProductSimCard({
             />
           </div>
           <span className="text-xs text-gray-400">台</span>
-          <span className="text-xs text-gray-400 ml-2">
-            ロット: {product.planLot} | 発注点: {product.reorderPoint}
-          </span>
         </div>
 
         {/* 計画テーブル */}
@@ -347,21 +344,6 @@ export default function ProductSimCard({
                     {r.requiredProduction > 0
                       ? r.requiredProduction.toLocaleString()
                       : <span className="text-gray-300">0</span>}
-                  </td>
-                ))}
-              </tr>
-
-              {/* ロット換算 */}
-              <tr className="hover:bg-gray-50">
-                <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">
-                  <span className="inline-block w-2 h-2 rounded-full bg-orange-200 mr-1.5" />
-                  ロット換算（{product.planLot}台/lot）
-                </td>
-                {results.map((r) => (
-                  <td key={r.yearMonth} className="px-2 py-2 text-right text-gray-500">
-                    {r.requiredProduction > 0
-                      ? `${Math.ceil(r.requiredProduction / product.planLot)}lot`
-                      : <span className="text-gray-300">-</span>}
                   </td>
                 ))}
               </tr>

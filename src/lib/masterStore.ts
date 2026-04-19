@@ -9,8 +9,6 @@ const defaultProductMasters: ProductMaster[] = defaultProducts.map((p) => ({
   code: '',                           // 製品コード（数字コード）は未設定
   modelCode: p.manufacturingItemCode, // 製造器種名（例: FHE-16AW1-G）
   primaryLine: p.primaryLine,
-  planLot: p.planLot,
-  reorderPoint: p.reorderPoint,
   capacityPerPallet: 20,
   palletType: 'P01' as const,
   productionMethod: p.productionMethod,

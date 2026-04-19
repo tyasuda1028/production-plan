@@ -55,9 +55,7 @@ export interface Product {
   gasType: string;
   primaryFactory: string;
   primaryLine: number;
-  planLot: number;
   productionMethod: string; // A/B/C/D
-  reorderPoint: number;
   orderQuantity: number;
   factoryInventory: number;
   branchInventory: number;

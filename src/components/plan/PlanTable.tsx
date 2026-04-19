@@ -21,7 +21,9 @@ function InvMonthsCell({ value }: { value: number }) {
 }
 
 const METHOD_COLORS: Record<string, string> = {
+  "A:主力製品": "bg-green-50 text-green-700",
   "B:在庫製品": "bg-blue-50 text-blue-700",
+  "C:計画生産": "bg-amber-50 text-amber-700",
   "D:受注生産": "bg-purple-50 text-purple-700",
 };
 
@@ -288,8 +290,6 @@ export default function PlanTable() {
                             <span>工場在庫: <strong className="text-gray-700">{p.factoryInventory.toLocaleString()}</strong></span>
                             <span>拠点在庫: <strong className="text-gray-700">{p.branchInventory.toLocaleString()}</strong></span>
                             <span>前月末在庫: <strong className="text-gray-700">{p.lastMonthInventory.toLocaleString()}</strong></span>
-                            <span>発注点: <strong className="text-gray-700">{p.reorderPoint.toLocaleString()}</strong></span>
-                            <span>ロット: <strong className="text-gray-700">{p.planLot.toLocaleString()}</strong></span>
                           </div>
                         </td>
                       </tr>

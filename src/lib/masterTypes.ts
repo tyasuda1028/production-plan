@@ -3,11 +3,9 @@ export interface ProductMaster {
   code: string;               // 製品コード（任意）
   modelCode: string;          // 製造器種名（例: FHE-16AW1-G）
   primaryLine: number;        // 主ライン
-  planLot: number;            // 計画ロット
-  reorderPoint: number;       // 発注点
   capacityPerPallet: number;  // 個/パレット
   palletType: 'P01' | 'P02' | 'P03';
-  productionMethod: string;   // B:在庫製品 / D:受注生産
+  productionMethod: string;   // A:主力製品 / B:在庫製品 / C:計画生産 / D:受注生産
   active: boolean;            // 有効フラグ
 }
 

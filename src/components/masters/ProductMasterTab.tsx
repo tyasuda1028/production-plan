@@ -6,14 +6,12 @@ import { ProductMaster, PALLET_TYPES } from "@/lib/masterTypes";
 import { Plus, Pencil, Trash2, Upload, Download, Check, X } from "lucide-react";
 
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
-const METHOD_OPTIONS = ["B:在庫製品", "D:受注生産", "C:計画生産"];
+const METHOD_OPTIONS = ["A:主力製品", "B:在庫製品", "C:計画生産", "D:受注生産"];
 
 const emptyProduct = (): ProductMaster => ({
   code: "",
   modelCode: "",
   primaryLine: 2,
-  planLot: 10,
-  reorderPoint: 50,
   capacityPerPallet: 20,
   palletType: "P01",
   productionMethod: "B:在庫製品",
@@ -22,9 +20,9 @@ const emptyProduct = (): ProductMaster => ({
 
 function CsvExportButton({ products }: { products: ProductMaster[] }) {
   const handle = () => {
-    const header = "製品コード,製造器種名,個/枚,パレット型,ライン,ロット,発注点,生産方式";
+    const header = "製品コード,製造器種名,個/枚,パレット型,ライン,生産方式";
     const rows = products.map((p) =>
-      [p.code, p.modelCode, p.capacityPerPallet, p.palletType, p.primaryLine, p.planLot, p.reorderPoint, p.productionMethod].join(",")
+      [p.code, p.modelCode, p.capacityPerPallet, p.palletType, p.primaryLine, p.productionMethod].join(",")
     );
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -101,7 +99,7 @@ export default function ProductMasterTab() {
         const rows: ProductMaster[] = [];
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(",").map((s) => s.trim());
-          const [code, modelCode, cap, pallet, line, lot, reorder, method] = cols;
+          const [code, modelCode, cap, pallet, line, method] = cols;
           if (!modelCode) continue;
           rows.push({
             code: code ?? "",
@@ -109,8 +107,6 @@ export default function ProductMasterTab() {
             capacityPerPallet: parseInt(cap) || 20,
             palletType: (["P01","P02","P03"].includes(pallet) ? pallet : "P01") as ProductMaster["palletType"],
             primaryLine: parseInt(line) || 2,
-            planLot: parseInt(lot) || 10,
-            reorderPoint: parseInt(reorder) || 50,
             productionMethod: method || "B:在庫製品",
             active: true,
           });
@@ -167,16 +163,6 @@ export default function ProductMasterTab() {
           </select>
         </td>
         <td className="px-3 py-2">
-          <input type="number" value={buf.planLot} min={1}
-            onChange={(e) => setBuf({ ...buf, planLot: +e.target.value })}
-            className="w-16 text-xs border border-blue-300 rounded px-2 py-1 text-right" />
-        </td>
-        <td className="px-3 py-2">
-          <input type="number" value={buf.reorderPoint} min={0}
-            onChange={(e) => setBuf({ ...buf, reorderPoint: +e.target.value })}
-            className="w-16 text-xs border border-blue-300 rounded px-2 py-1 text-right" />
-        </td>
-        <td className="px-3 py-2">
           <select value={buf.productionMethod} onChange={(e) => setBuf({ ...buf, productionMethod: e.target.value })}
             className="text-xs border border-blue-300 rounded px-1.5 py-1 bg-white w-full">
             {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -212,7 +198,7 @@ export default function ProductMasterTab() {
 
       {/* CSV仕様 */}
       <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-700">
-        <strong>CSV形式：</strong> 製品コード, 製造器種名, 個/枚, パレット型(P01/P02/P03), ライン, ロット, 発注点, 生産方式
+        <strong>CSV形式：</strong> 製品コード, 製造器種名, 個/枚, パレット型(P01/P02/P03), ライン, 生産方式
       </div>
 
       {/* テーブル */}
@@ -226,8 +212,6 @@ export default function ProductMasterTab() {
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">ライン</th>
                 <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">個/パレット</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">パレット型</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">ロット</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">発注点</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">生産方式</th>
                 <th className="px-3 py-2.5 w-16" />
               </tr>
@@ -248,8 +232,6 @@ export default function ProductMasterTab() {
                       <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">{p.palletType}</span>
                       <span className="ml-1 text-gray-400 text-[10px]">{PALLET_TYPES[p.palletType]?.size}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-right text-gray-600">{p.planLot}</td>
-                    <td className="px-3 py-2.5 text-xs text-right text-gray-600">{p.reorderPoint}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{p.productionMethod}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1">
