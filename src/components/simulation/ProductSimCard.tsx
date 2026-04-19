@@ -68,52 +68,19 @@ function StepperInput({
   min?: number;
   max?: number;
 }) {
-  const adj = (delta: number) =>
-    onChange(Math.min(max, Math.max(min, parseFloat((value + delta).toFixed(2)))));
-
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      {/* +0.5 / +0.1 */}
-      <div className="flex items-center gap-0.5">
-        <button
-          onClick={() => adj(+0.5)}
-          title="+0.5"
-          className="w-8 h-4 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-[10px] font-bold flex items-center justify-center leading-none"
-        >
-          +0.5
-        </button>
-        <button
-          onClick={() => adj(+0.1)}
-          title="+0.1"
-          className="w-8 h-4 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-500 text-[10px] font-bold flex items-center justify-center leading-none"
-        >
-          +0.1
-        </button>
-      </div>
-
-      {/* 値表示 */}
-      <span className="text-xs font-semibold text-indigo-700 w-10 text-center tabular-nums">
-        {value.toFixed(1)}
-      </span>
-
-      {/* -0.1 / -0.5 */}
-      <div className="flex items-center gap-0.5">
-        <button
-          onClick={() => adj(-0.1)}
-          title="-0.1"
-          className="w-8 h-4 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 text-[10px] font-bold flex items-center justify-center leading-none"
-        >
-          −0.1
-        </button>
-        <button
-          onClick={() => adj(-0.5)}
-          title="-0.5"
-          className="w-8 h-4 rounded bg-gray-200 hover:bg-gray-300 text-gray-600 text-[10px] font-bold flex items-center justify-center leading-none"
-        >
-          −0.5
-        </button>
-      </div>
-    </div>
+    <input
+      type="number"
+      value={value}
+      onChange={(e) => {
+        const v = parseFloat(e.target.value);
+        if (!isNaN(v)) onChange(Math.min(max, Math.max(min, parseFloat(v.toFixed(2)))));
+      }}
+      min={min}
+      max={max}
+      step={0.05}
+      className="w-16 text-xs font-semibold text-indigo-700 text-center tabular-nums border border-indigo-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+    />
   );
 }
 
