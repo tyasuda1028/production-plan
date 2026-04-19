@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -68,13 +68,41 @@ function StepperInput({
   min?: number;
   max?: number;
 }) {
+  // ローカル下書き状態: 入力中は自由に編集でき、blur/Enter で確定する
+  const [draft, setDraft] = useState(value.toFixed(2));
+
+  // リセットなど外部から value が変わったら draft を同期
+  useEffect(() => {
+    setDraft(value.toFixed(2));
+  }, [value]);
+
+  const commit = (str: string) => {
+    const v = parseFloat(str);
+    if (!isNaN(v)) {
+      const clamped = parseFloat(Math.min(max, Math.max(min, v)).toFixed(2));
+      onChange(clamped);
+      setDraft(clamped.toFixed(2));
+    } else {
+      // 不正な入力はリセット
+      setDraft(value.toFixed(2));
+    }
+  };
+
   return (
     <input
       type="number"
-      value={value}
+      value={draft}
       onChange={(e) => {
+        setDraft(e.target.value);
+        // スピナー（▲▼）は常に有効な数値なので即時確定
         const v = parseFloat(e.target.value);
-        if (!isNaN(v)) onChange(Math.min(max, Math.max(min, parseFloat(v.toFixed(2)))));
+        if (!isNaN(v) && e.target.value !== "" && !e.target.value.endsWith(".")) {
+          onChange(Math.min(max, Math.max(min, parseFloat(v.toFixed(2)))));
+        }
+      }}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
       }}
       min={min}
       max={max}
