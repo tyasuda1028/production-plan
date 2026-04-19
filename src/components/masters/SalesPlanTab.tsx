@@ -212,7 +212,6 @@ function CsvImportSection({
                   <thead className="sticky top-0">
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">製造器種名</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">品目名</th>
                       {preview[0]?.plans.map(({ yearMonth }) => (
                         <th key={yearMonth} className="px-3 py-2 text-right font-medium text-blue-600 whitespace-nowrap">
                           {formatYearMonth(yearMonth)}
@@ -225,9 +224,6 @@ function CsvImportSection({
                     {preview.map((r) => (
                       <tr key={r.manufacturingItemCode} className={`hover:bg-gray-50 ${!r.isKnown ? "bg-amber-50/50" : ""}`}>
                         <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.manufacturingItemCode}</td>
-                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                          {r.productName || <span className="text-amber-600">未登録品目</span>}
-                        </td>
                         {r.plans.map(({ yearMonth, salesPlan }) => (
                           <td key={yearMonth} className="px-3 py-2 text-right font-medium text-gray-800">
                             {salesPlan.toLocaleString()}
@@ -257,6 +253,13 @@ export default function SalesPlanTab() {
   const salesPlanOverrides = useMasterStore((s) => s.salesPlanOverrides);
   const setSalesPlanOverride = useMasterStore((s) => s.setSalesPlanOverride);
   const clearSalesPlanOverride = useMasterStore((s) => s.clearSalesPlanOverride);
+  const productMasters = useMasterStore((s) => s.productMasters);
+
+  // 製造器種名 → 品目コードのマップ
+  const codeByModelCode = useMemo(
+    () => new Map(productMasters.map((pm) => [pm.modelCode, pm.code])),
+    [productMasters]
+  );
 
   const planMonths = getPlanMonths(planBaseMonth);
 
@@ -265,9 +268,10 @@ export default function SalesPlanTab() {
   const filtered = useMemo(() =>
     products.filter((p) => {
       const q = search.toLowerCase();
-      return !q || p.productName.toLowerCase().includes(q) || p.manufacturingItemCode.toLowerCase().includes(q);
+      const code = codeByModelCode.get(p.manufacturingItemCode) ?? "";
+      return !q || code.toLowerCase().includes(q) || p.manufacturingItemCode.toLowerCase().includes(q);
     }),
-    [search]
+    [search, codeByModelCode]
   );
 
   const getOverride = useCallback(
@@ -332,7 +336,7 @@ export default function SalesPlanTab() {
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             type="text"
-            placeholder="品目名・コードで検索..."
+            placeholder="品目コード・製造器種名で検索..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full text-sm border-none outline-none bg-transparent"
@@ -351,8 +355,8 @@ export default function SalesPlanTab() {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50 z-10">品目名</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[180px] bg-gray-50 z-10">製造器種名</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50 z-10">品目コード</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[120px] bg-gray-50 z-10">製造器種名</th>
                 {planMonths.map((ym) => (
                   <th key={ym} className="px-3 py-3 text-right text-xs font-medium text-blue-600 whitespace-nowrap min-w-[90px]">
                     {formatYearMonth(ym)}
@@ -366,10 +370,10 @@ export default function SalesPlanTab() {
                 const modified = hasAnyOverride(p.id);
                 return (
                   <tr key={p.id} className={`hover:bg-gray-50 ${modified ? "bg-blue-50/30" : ""}`}>
-                    <td className="px-3 py-2 text-xs font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-inherit z-10 max-w-[175px] truncate">
-                      {p.productName}
+                    <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800 whitespace-nowrap sticky left-0 bg-inherit z-10">
+                      {codeByModelCode.get(p.manufacturingItemCode) || <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-500 font-mono whitespace-nowrap sticky left-[180px] bg-inherit z-10">
+                    <td className="px-3 py-2 text-xs text-gray-500 font-mono whitespace-nowrap sticky left-[120px] bg-inherit z-10">
                       {p.manufacturingItemCode}
                     </td>
                     {planMonths.map((ym) => {
