@@ -1,15 +1,48 @@
 "use client";
 
-import { lineSummaries, formatYearMonth, getPlanMonths } from "@/lib/data";
+import { useMemo } from "react";
+import { lineSummaries, products, formatYearMonth, getPlanMonths, addMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
+import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import LineCard from "@/components/dashboard/LineCard";
 
 export default function DashboardPage() {
-  const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
-  const planMonths    = getPlanMonths(planBaseMonth);
+  const planBaseMonth  = useMasterStore((s) => s.planBaseMonth);
+  const planMonths     = getPlanMonths(planBaseMonth);
+  const prevMonth      = addMonths(planBaseMonth, -1);
+  const leveledPlansMap = useLeveledPlans();
 
-  // ブライツ全体の直近合計
-  const total = lineSummaries[0].monthly[lineSummaries[0].monthly.length - 1];
+  // 表示月の全品目合計（均等日量計画ベース）
+  const currentKPI = useMemo(() => {
+    let salesPlan = 0, productionSchedule = 0, monthEndInventory = 0;
+    products.forEach((p) => {
+      const lp = leveledPlansMap.get(p.id)?.get(planBaseMonth);
+      if (!lp) return;
+      salesPlan          += lp.salesPlan;
+      productionSchedule += lp.productionSchedule;
+      monthEndInventory  += lp.monthEndInventory;
+    });
+    const inventoryMonths = salesPlan > 0
+      ? parseFloat((monthEndInventory / salesPlan).toFixed(2))
+      : 0;
+    return { salesPlan, productionSchedule, monthEndInventory, inventoryMonths };
+  }, [leveledPlansMap, planBaseMonth]);
+
+  // 前月の全品目合計（静的データ）
+  const prevKPI = useMemo(() => {
+    let salesPlan = 0, productionSchedule = 0, monthEndInventory = 0;
+    products.forEach((p) => {
+      const mp = p.monthlyPlans.find((m) => m.yearMonth === prevMonth);
+      if (!mp) return;
+      salesPlan          += mp.salesPlan;
+      productionSchedule += mp.productionSchedule;
+      monthEndInventory  += mp.monthEndInventory;
+    });
+    const inventoryMonths = salesPlan > 0
+      ? parseFloat((monthEndInventory / salesPlan).toFixed(2))
+      : 0;
+    return { salesPlan, productionSchedule, monthEndInventory, inventoryMonths };
+  }, [prevMonth]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -24,10 +57,26 @@ export default function DashboardPage() {
       {/* 全体サマリー */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "今回販売計画（直近月）", value: total.currSalesPlan, sub: `前回 ${total.prevSalesPlan.toLocaleString()}` },
-          { label: "今回生産計画（直近月）", value: total.currProductionPlan, sub: `前回 ${total.prevProductionPlan.toLocaleString()}` },
-          { label: "月末在庫（直近月）", value: total.currMonthEndInventory, sub: `前回 ${total.prevMonthEndInventory.toLocaleString()}` },
-          { label: "在庫月数（直近月）", value: `${total.currInventoryMonths}ヶ月`, sub: `前回 ${total.prevInventoryMonths}ヶ月` },
+          {
+            label: `販売計画（${formatYearMonth(planBaseMonth)}）`,
+            value: currentKPI.salesPlan,
+            sub: `前月 ${prevKPI.salesPlan.toLocaleString()} 台`,
+          },
+          {
+            label: `生産計画（${formatYearMonth(planBaseMonth)}）`,
+            value: currentKPI.productionSchedule,
+            sub: `前月 ${prevKPI.productionSchedule.toLocaleString()} 台`,
+          },
+          {
+            label: `月末在庫（${formatYearMonth(planBaseMonth)}）`,
+            value: currentKPI.monthEndInventory,
+            sub: `前月 ${prevKPI.monthEndInventory.toLocaleString()} 台`,
+          },
+          {
+            label: `在庫月数（${formatYearMonth(planBaseMonth)}）`,
+            value: `${currentKPI.inventoryMonths.toFixed(1)} ヶ月`,
+            sub: `前月 ${prevKPI.inventoryMonths.toFixed(1)} ヶ月`,
+          },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="text-xs text-gray-500 mb-1">{kpi.label}</div>
