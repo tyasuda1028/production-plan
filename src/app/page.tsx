@@ -1,8 +1,12 @@
-import { lineSummaries, formatYearMonth } from "@/lib/data";
+"use client";
+
+import { lineSummaries, formatYearMonth, getPlanMonths } from "@/lib/data";
+import { useMasterStore } from "@/lib/masterStore";
 import LineCard from "@/components/dashboard/LineCard";
 
 export default function DashboardPage() {
-  const months = lineSummaries[0].monthly.map((m) => m.yearMonth);
+  const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
+  const planMonths    = getPlanMonths(planBaseMonth);
 
   // ブライツ全体の直近合計
   const total = lineSummaries[0].monthly[lineSummaries[0].monthly.length - 1];
@@ -13,7 +17,7 @@ export default function DashboardPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">ダッシュボード</h1>
         <p className="text-sm text-gray-500 mt-1">
-          対象期間：{formatYearMonth(months[0])} 〜 {formatYearMonth(months[months.length - 1])}
+          表示月：{formatYearMonth(planBaseMonth)}（計画期間 {formatYearMonth(planMonths[0])} 〜 {formatYearMonth(planMonths[planMonths.length - 1])}）
         </p>
       </div>
 
