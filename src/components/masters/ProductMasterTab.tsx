@@ -20,7 +20,7 @@ const emptyProduct = (): ProductMaster => ({
 
 function CsvExportButton({ products }: { products: ProductMaster[] }) {
   const handle = () => {
-    const header = "製品コード,製造器種名,個/枚,パレット型,ライン,生産方式";
+    const header = "品目コード,製造器種名,個/枚,パレット型,ライン,生産方式";
     const rows = products.map((p) =>
       [p.code, p.modelCode, p.capacityPerPallet, p.palletType, p.primaryLine, p.productionMethod].join(",")
     );
@@ -134,10 +134,15 @@ export default function ProductMasterTab() {
     return (
       <tr className="bg-blue-50/60 border-b border-blue-200">
         <td className="px-3 py-2">
-          <EditableCell value={buf.code} onChange={(v) => setBuf({ ...buf, code: v })} placeholder="製品コード（任意）" />
+          <EditableCell value={buf.code} onChange={(v) => setBuf({ ...buf, code: v })} placeholder="品目コード（任意）" />
         </td>
         <td className="px-3 py-2">
-          <EditableCell value={buf.modelCode} onChange={(v) => setBuf({ ...buf, modelCode: v })} placeholder="FHE-16AW1-G" />
+          <div className="space-y-1">
+            <EditableCell value={buf.modelCode} onChange={(v) => setBuf({ ...buf, modelCode: v })} placeholder="FHE-16AW1-G" />
+            {buf.code && (
+              <div className="text-[10px] text-gray-400 font-mono px-1">コード: {buf.code}</div>
+            )}
+          </div>
         </td>
         <td className="px-3 py-2">
           <select value={buf.primaryLine} onChange={(e) => setBuf({ ...buf, primaryLine: +e.target.value })}
@@ -198,7 +203,7 @@ export default function ProductMasterTab() {
 
       {/* CSV仕様 */}
       <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-700">
-        <strong>CSV形式：</strong> 製品コード, 製造器種名, 個/枚, パレット型(P01/P02/P03), ライン, 生産方式
+        <strong>CSV形式：</strong> 品目コード, 製造器種名, 個/枚, パレット型(P01/P02/P03), ライン, 生産方式
       </div>
 
       {/* テーブル */}
@@ -207,7 +212,7 @@ export default function ProductMasterTab() {
           <table className="w-full text-sm border-collapse min-w-max">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">製品コード</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">品目コード</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">製造器種名<span className="ml-1 text-[10px] text-gray-400">（例: FHE-16AW1-G）</span></th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">ライン</th>
                 <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">個/パレット</th>
@@ -225,7 +230,12 @@ export default function ProductMasterTab() {
                 ) : (
                   <tr key={key} className={`hover:bg-gray-50 ${!p.active ? "opacity-40" : ""}`}>
                     <td className="px-3 py-2.5 text-xs font-mono font-semibold text-gray-800">{p.code}</td>
-                    <td className="px-3 py-2.5 text-xs font-mono text-gray-800 whitespace-nowrap font-medium">{p.modelCode}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <div className="text-xs font-mono font-medium text-gray-800">{p.modelCode}</div>
+                      {p.code && (
+                        <div className="text-[10px] text-gray-400 font-mono mt-0.5">コード: {p.code}</div>
+                      )}
+                    </td>
                     <td className="px-3 py-2.5 text-xs text-center text-gray-600">{p.primaryLine}</td>
                     <td className="px-3 py-2.5 text-xs text-right text-gray-600">{p.capacityPerPallet}</td>
                     <td className="px-3 py-2.5 text-xs">
