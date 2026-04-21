@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import HydrationGuard from "@/components/HydrationGuard";
 
 export const metadata: Metadata = {
   title: "生産計画システム",
@@ -18,7 +19,9 @@ export default function RootLayout({
         <div className="flex h-screen overflow-hidden">
           <Sidebar />
           <main className="flex-1 overflow-y-auto">
-            {children}
+            <HydrationGuard>
+              {children}
+            </HydrationGuard>
           </main>
         </div>
       </body>

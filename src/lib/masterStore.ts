@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, SalesPlanOverride, SimMonthOverride } from './masterTypes';
 import { products as defaultProducts } from './data';
+import { createSupabaseStorage } from './supabaseStorage';
 
 // デフォルト製品マスター（data.ts から生成）
 // ※ 製品コード（code）は空欄 → ユーザーが実際のコードを入力する
@@ -44,6 +45,10 @@ const defaultLineMasters: LineMaster[] = [
 ];
 
 interface MasterStore {
+  // データ読み込み完了フラグ（Supabase からの初回ロードが終わるまで false）
+  _hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
+
   // 計画基準月（全ページ共通）
   planBaseMonth: number;
   setPlanBaseMonth: (ym: number) => void;
@@ -89,6 +94,10 @@ interface MasterStore {
 export const useMasterStore = create<MasterStore>()(
   persist(
     (set, get) => ({
+      // ── ローディング ──
+      _hasHydrated: false,
+      setHasHydrated: (v: boolean) => set({ _hasHydrated: v }),
+
       // ── 計画基準月 ──
       planBaseMonth: 202603,
       setPlanBaseMonth: (ym: number) => set({ planBaseMonth: ym }),
@@ -259,6 +268,10 @@ export const useMasterStore = create<MasterStore>()(
     }),
     {
       name: 'production-plan-masters',
+      storage: createSupabaseStorage(),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
