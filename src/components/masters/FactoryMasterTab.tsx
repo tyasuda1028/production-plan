@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { FactoryMaster } from "@/lib/masterTypes";
-import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, AlertTriangle } from "lucide-react";
 
 const emptyFactory = (): FactoryMaster => ({
   factoryNumber: "",
@@ -36,13 +36,37 @@ function EditableCell({
 export default function FactoryMasterTab() {
   const { factoryMasters, addFactory, updateFactory, deleteFactory, lineMasters } = useMasterStore();
 
-  const [editing, setEditing] = useState<string | null>(null); // factoryName をキーとして使用
+  const [editing, setEditing] = useState<string | null>(null);
   const [editBuf, setEditBuf] = useState<FactoryMaster>(emptyFactory());
   const [editOriginalName, setEditOriginalName] = useState<string>("");
 
   const [adding, setAdding] = useState(false);
   const [newBuf, setNewBuf] = useState<FactoryMaster>(emptyFactory());
   const [addError, setAddError] = useState("");
+
+  // 孤立ライン（工場マスターに存在しない工場名を持つライン）
+  const orphanFactoryNames = useMemo(() => {
+    const registeredNames = new Set(factoryMasters.map((f) => f.factoryName));
+    const orphanNames = new Set<string>();
+    lineMasters.forEach((l) => {
+      if (l.factoryName && !registeredNames.has(l.factoryName)) {
+        orphanNames.add(l.factoryName);
+      }
+    });
+    return Array.from(orphanNames);
+  }, [factoryMasters, lineMasters]);
+
+  // 孤立ライン → 工場マスターに一括移行
+  function reassignOrphanLines(orphanName: string, targetFactoryName: string) {
+    const targetFactory = factoryMasters.find((f) => f.factoryName === targetFactoryName);
+    useMasterStore.setState((s) => ({
+      lineMasters: s.lineMasters.map((l) =>
+        l.factoryName === orphanName
+          ? { ...l, factoryName: targetFactoryName, classification: targetFactory?.classification ?? l.classification }
+          : l
+      ),
+    }));
+  }
 
   // 工場ごとのライン本数（ラインマスターから自動集計）
   const lineCountByFactory = (factoryName: string) =>
@@ -134,6 +158,39 @@ export default function FactoryMasterTab() {
         ライン本数はラインマスターの登録数から自動集計されます。
       </div>
 
+      {/* 孤立ライン警告 */}
+      {orphanFactoryNames.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 space-y-2">
+          <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            ラインマスターに未登録の工場名があります
+          </div>
+          {orphanFactoryNames.map((orphanName) => {
+            const count = lineMasters.filter((l) => l.factoryName === orphanName).length;
+            return (
+              <div key={orphanName} className="flex items-center gap-2 pl-6 flex-wrap">
+                <span className="text-xs text-amber-800 font-mono bg-amber-100 px-2 py-0.5 rounded">
+                  「{orphanName}」（{count} ライン）
+                </span>
+                <span className="text-xs text-amber-600">→ 移行先：</span>
+                {factoryMasters.map((f) => (
+                  <button
+                    key={f.factoryName}
+                    onClick={() => reassignOrphanLines(orphanName, f.factoryName)}
+                    className="text-xs bg-amber-600 text-white px-2.5 py-1 rounded hover:bg-amber-700"
+                  >
+                    {f.factoryName} に紐付け
+                  </button>
+                ))}
+                {factoryMasters.length === 0 && (
+                  <span className="text-xs text-amber-500">（工場マスターに登録してから移行してください）</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* 追加ボタン */}
       <div className="flex items-center gap-2">
         <button
@@ -172,7 +229,7 @@ export default function FactoryMasterTab() {
                   <EditableCell
                     value={newBuf.factoryName}
                     onChange={(v) => { setNewBuf({ ...newBuf, factoryName: v }); setAddError(""); }}
-                    placeholder="例: 01工場"
+                    placeholder="例: 大口工場"
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -211,7 +268,7 @@ export default function FactoryMasterTab() {
                     <EditableCell
                       value={editBuf.factoryName}
                       onChange={(v) => setEditBuf({ ...editBuf, factoryName: v })}
-                      placeholder="例: 01工場"
+                      placeholder="例: 大口工場"
                     />
                   </td>
                   <td className="px-4 py-2">
