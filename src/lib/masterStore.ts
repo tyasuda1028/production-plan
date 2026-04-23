@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, SalesPlanOverride, SimMonthOverride } from './masterTypes';
+import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride } from './masterTypes';
 import { products as defaultProducts } from './data';
 import { createSupabaseStorage } from './supabaseStorage';
 
@@ -36,12 +36,17 @@ function buildDefaultOperatingDays(): OperatingDaysMaster[] {
   });
 }
 
+// デフォルト工場マスター
+const defaultFactoryMasters: FactoryMaster[] = [
+  { factoryName: "02工場", classification: "ブライツ", note: "" },
+];
+
 // デフォルトラインマスター
 const defaultLineMasters: LineMaster[] = [
-  { lineNumber: 2, lineName: "ライン2", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 540 },
-  { lineNumber: 3, lineName: "ライン3", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 330 },
-  { lineNumber: 4, lineName: "ライン4", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 200 },
-  { lineNumber: 7, lineName: "ライン7", factoryName: "02工場", classification: "ブライツ", dailyCapacity:  90 },
+  { lineNumber: 2, lineName: "ライン2", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 540, remarks: "" },
+  { lineNumber: 3, lineName: "ライン3", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 330, remarks: "" },
+  { lineNumber: 4, lineName: "ライン4", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 200, remarks: "" },
+  { lineNumber: 7, lineName: "ライン7", factoryName: "02工場", classification: "ブライツ", dailyCapacity:  90, remarks: "" },
 ];
 
 interface MasterStore {
@@ -52,6 +57,12 @@ interface MasterStore {
   // 計画基準月（全ページ共通）
   planBaseMonth: number;
   setPlanBaseMonth: (ym: number) => void;
+
+  // 工場マスター
+  factoryMasters: FactoryMaster[];
+  addFactory: (f: FactoryMaster) => void;
+  updateFactory: (factoryName: string, patch: Partial<FactoryMaster>) => void;
+  deleteFactory: (factoryName: string) => void;
 
   // ラインマスター
   lineMasters: LineMaster[];
@@ -101,6 +112,26 @@ export const useMasterStore = create<MasterStore>()(
       // ── 計画基準月 ──
       planBaseMonth: 202603,
       setPlanBaseMonth: (ym: number) => set({ planBaseMonth: ym }),
+
+      // ── 工場マスター ──
+      factoryMasters: defaultFactoryMasters,
+
+      addFactory: (f) =>
+        set((s) => ({
+          factoryMasters: [...s.factoryMasters.filter((x) => x.factoryName !== f.factoryName), f],
+        })),
+
+      updateFactory: (factoryName, patch) =>
+        set((s) => ({
+          factoryMasters: s.factoryMasters.map((f) =>
+            f.factoryName === factoryName ? { ...f, ...patch } : f
+          ),
+        })),
+
+      deleteFactory: (factoryName) =>
+        set((s) => ({
+          factoryMasters: s.factoryMasters.filter((f) => f.factoryName !== factoryName),
+        })),
 
       // ── ラインマスター ──
       lineMasters: defaultLineMasters,

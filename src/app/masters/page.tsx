@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Package, Calendar, Upload, Layers, TrendingUp } from "lucide-react";
+import { Package, Calendar, Upload, Layers, TrendingUp, Building2 } from "lucide-react";
 import ProductMasterTab from "@/components/masters/ProductMasterTab";
 import OperatingDaysTab from "@/components/masters/OperatingDaysTab";
 import InventoryImportTab from "@/components/masters/InventoryImportTab";
 import LineSettingsTab from "@/components/masters/LineSettingsTab";
 import SalesPlanTab from "@/components/masters/SalesPlanTab";
+import FactoryMasterTab from "@/components/masters/FactoryMasterTab";
 
 const TABS = [
   { id: "products",       label: "製品マスター",      icon: Package,    desc: "製品コード・パレット設定・ライン設定" },
-  { id: "lines",          label: "ラインマスター",     icon: Layers,     desc: "分類・工場名・ライン名の設定" },
+  { id: "factories",      label: "工場マスター",       icon: Building2,  desc: "工場名・分類の管理" },
+  { id: "lines",          label: "ラインマスター",     icon: Layers,     desc: "ライン番号・工場・日量能力の設定" },
   { id: "sales-plan",     label: "販売計画入力",      icon: TrendingUp, desc: "品目ごとに先6ヶ月分の販売計画を入力" },
   { id: "operating-days", label: "稼働日マスター",    icon: Calendar,   desc: "月別稼働日カレンダー設定" },
   { id: "inventory",      label: "在庫CSVインポート", icon: Upload,     desc: "月末在庫数をCSVで一括更新" },
@@ -49,6 +51,7 @@ export default function MastersPage() {
 
       {/* タブコンテンツ */}
       {activeTab === "products"       && <ProductMasterTab />}
+      {activeTab === "factories"      && <FactoryMasterTab />}
       {activeTab === "lines"          && <LineSettingsTab />}
       {activeTab === "sales-plan"     && <SalesPlanTab />}
       {activeTab === "operating-days" && <OperatingDaysTab />}

@@ -15,13 +15,21 @@ export const PALLET_TYPES: Record<string, { name: string; size: string }> = {
   P03: { name: '軽量', size: '800mm' },
 };
 
+// ========== 工場マスター ==========
+export interface FactoryMaster {
+  factoryName: string;    // 工場名（主キー・例: 02工場）
+  classification: string; // 分類（例: ブライツ）
+  note: string;           // 備考
+}
+
 // ========== ラインマスター ==========
 export interface LineMaster {
   lineNumber: number;      // ライン番号 (2, 3, 4, 7)
   lineName: string;        // ライン名（例: ライン2）
-  factoryName: string;     // 工場名（例: 第1工場）
-  classification: string;  // 分類（例: ブライツ）
+  factoryName: string;     // 工場名（工場マスターと連動）
+  classification: string;  // 分類（工場マスターから自動補完）
   dailyCapacity: number;   // 日量能力（台/日）
+  remarks: string;         // 備考
 }
 
 // ========== 販売計画オーバーライド ==========
