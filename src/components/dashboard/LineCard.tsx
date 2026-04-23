@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { LineSummary } from "@/lib/types";
-import { products, addMonths, getPlanMonths, formatYearMonth, getLineColor } from "@/lib/data";
+import { products, addMonths, getPlanMonths, formatYearMonth } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import {
@@ -20,7 +19,16 @@ import {
 } from "recharts";
 
 interface Props {
-  line: LineSummary;
+  /** ライン番号リスト（合計カードは複数、個別カードは単一） */
+  lineNumbers: number[];
+  /** カードタイトル（例: "ブライツ 合計", "ライン2"） */
+  title: string;
+  /** サブタイトル（例: "ライン2 / ライン3 / ..."） */
+  subtitle?: string;
+  /** グラフ色 */
+  color: string;
+  /** 合計カード(グループ)のスタイリングフラグ */
+  isGroupSummary?: boolean;
 }
 
 function formatYM(ym: number) {
@@ -28,35 +36,22 @@ function formatYM(ym: number) {
   return `${s.slice(2, 4)}/${s.slice(4)}`;
 }
 
-export default function LineCard({ line }: Props) {
-  const planBaseMonth   = useMasterStore((s) => s.planBaseMonth);
-  const salesOverrides  = useMasterStore((s) => s.salesPlanOverrides);
-  const masterOpDays    = useMasterStore((s) => s.operatingDays);
-  const lineMasters     = useMasterStore((s) => s.lineMasters);
+export default function LineCard({ lineNumbers, title, subtitle, color, isGroupSummary }: Props) {
+  const planBaseMonth  = useMasterStore((s) => s.planBaseMonth);
+  const salesOverrides = useMasterStore((s) => s.salesPlanOverrides);
+  const masterOpDays   = useMasterStore((s) => s.operatingDays);
+  const lineMasters    = useMasterStore((s) => s.lineMasters);
 
-  // 均等日量計画（全品目）
   const leveledPlansMap = useLeveledPlans();
 
-  const color = getLineColor(line.lineCode);
-
-  // ラインマスター情報
-  const firstLine      = line.lines[0];
-  const lineMaster     = lineMasters.find((l) => l.lineNumber === firstLine);
-  const classification = lineMaster?.classification ?? line.lineCode;
-  const lineNames      = line.lines
-    .map((n) => lineMasters.find((l) => l.lineNumber === n)?.lineName ?? `ライン${n}`)
-    .join(" / ");
-  const factoryName = lineMaster?.factoryName ?? `工場${line.factoryCode}`;
-  // 日量能力: ラインマスターの合計（旧 localStorage データで undefined の場合は 0 として扱う）
-  // なければ lineSummary のデフォルト値にフォールバック
-  const dailyCapacity = useMemo(() => {
-    const fromMasters = line.lines.reduce((sum, n) => {
+  // 日産能力: 対象ライン合計
+  const dailyCapacity = useMemo(() =>
+    lineNumbers.reduce((sum, n) => {
       const lm = lineMasters.find((l) => l.lineNumber === n);
-      const cap = typeof lm?.dailyCapacity === "number" ? lm.dailyCapacity : 0;
-      return sum + cap;
-    }, 0);
-    return fromMasters > 0 ? fromMasters : (line.dailyCapacity ?? 0);
-  }, [line.lines, line.dailyCapacity, lineMasters]);
+      return sum + (lm?.dailyCapacity ?? 0);
+    }, 0),
+    [lineNumbers, lineMasters]
+  );
 
   // 表示月: 前月 + 当月から先6ヶ月 = 計7ヶ月
   const displayMonths = useMemo(() =>
@@ -70,13 +65,13 @@ export default function LineCard({ line }: Props) {
     [salesOverrides]
   );
 
-  // このラインに属する品目を絞り込む
+  // このカードに属する品目
   const lineProducts = useMemo(() =>
-    products.filter((p) => line.lines.includes(p.primaryLine)),
-    [line.lines]
+    products.filter((p) => lineNumbers.includes(p.primaryLine)),
+    [lineNumbers]
   );
 
-  // 月別集計データを計算
+  // 月別集計
   const chartData = useMemo(() =>
     displayMonths.map((ym) => {
       let totalSales    = 0;
@@ -84,7 +79,6 @@ export default function LineCard({ line }: Props) {
       let totalSchedule = 0;
 
       lineProducts.forEach((p) => {
-        // 計画6ヶ月は均等日量計画から、前月など範囲外は静的データにフォールバック
         const leveled = leveledPlansMap.get(p.id)?.get(ym);
         if (leveled) {
           totalSales    += leveled.salesPlan;
@@ -100,51 +94,57 @@ export default function LineCard({ line }: Props) {
         }
       });
 
-      const opDays     = masterOpDays.find((o) => o.yearMonth === ym)?.operatingDates.length ?? 20;
-      const invMonths  = totalSales > 0 ? parseFloat((totalEndInv / totalSales).toFixed(2)) : 0;
-      const dailyQty   = opDays > 0 ? Math.round(totalSchedule / opDays) : 0;
+      const opDays    = masterOpDays.find((o) => o.yearMonth === ym)?.operatingDates.length ?? 20;
+      const invMonths = totalSales > 0 ? parseFloat((totalEndInv / totalSales).toFixed(2)) : 0;
+      const dailyQty  = opDays > 0 ? Math.round(totalSchedule / opDays) : 0;
 
       return {
-        month:                 formatYM(ym),
-        yearMonth:             ym,
-        salesPlan:             totalSales,
-        monthEndInventory:     totalEndInv,
+        month:                   formatYM(ym),
+        yearMonth:               ym,
+        salesPlan:               totalSales,
+        monthEndInventory:       totalEndInv,
         monthEndInventoryMonths: invMonths,
-        dailyQuantity:         dailyQty,
-        operatingDays:         opDays,
-        isCurrent:             ym === planBaseMonth,
+        dailyQuantity:           dailyQty,
+        operatingDays:           opDays,
+        isCurrent:               ym === planBaseMonth,
       };
     }),
     [displayMonths, lineProducts, leveledPlansMap, overrideMap, masterOpDays, planBaseMonth]
   );
 
-  // 表示月（planBaseMonth）のKPI
   const currentData = chartData.find((d) => d.yearMonth === planBaseMonth) ?? chartData[1];
 
+  const cardCls = isGroupSummary
+    ? "bg-white rounded-lg border-2 border-blue-200 p-5 space-y-4 shadow-sm"
+    : "bg-white rounded-lg border border-gray-200 p-5 space-y-4";
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
+    <div className={cardCls}>
       {/* ヘッダー */}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full inline-block" style={{ background: color }} />
-            <h3 className="font-semibold text-gray-800">{classification}</h3>
+            <h3 className={`font-semibold text-gray-800 ${isGroupSummary ? "text-base" : "text-sm"}`}>
+              {title}
+            </h3>
+            {isGroupSummary && (
+              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">合計</span>
+            )}
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {factoryName} | {lineNames} | 日産能力 {dailyCapacity.toLocaleString()} 台
-          </p>
+          {subtitle && (
+            <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
+          )}
         </div>
-        <div className="text-right text-xs text-gray-400">
-          {formatYearMonth(planBaseMonth)}
-        </div>
+        <div className="text-right text-xs text-gray-400">{formatYearMonth(planBaseMonth)}</div>
       </div>
 
       {/* KPIバッジ */}
       <div className="grid grid-cols-3 gap-2">
         {[
-          { label: "販売計画",     value: currentData?.salesPlan,                 unit: "台" },
-          { label: "月末在庫",     value: currentData?.monthEndInventory,          unit: "台" },
-          { label: "在庫月数",     value: currentData?.monthEndInventoryMonths,    unit: "ヶ月", decimal: true },
+          { label: "販売計画",  value: currentData?.salesPlan,              unit: "台"  },
+          { label: "月末在庫",  value: currentData?.monthEndInventory,       unit: "台"  },
+          { label: "在庫月数",  value: currentData?.monthEndInventoryMonths, unit: "ヶ月", decimal: true },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-gray-50 rounded p-2 text-center">
             <div className="text-xs text-gray-500">{kpi.label}</div>
@@ -158,16 +158,14 @@ export default function LineCard({ line }: Props) {
         ))}
       </div>
 
-      {/* ── Chart 1: 月末在庫(棒) + 販売計画(線) / 在庫月数(線・右軸) ── */}
+      {/* Chart 1: 月末在庫(棒) + 販売計画(線) + 在庫月数(右軸) */}
       <div>
         <p className="text-[10px] text-gray-400 mb-1">在庫・販売計画推移</p>
         <ResponsiveContainer width="100%" height={170}>
           <ComposedChart data={chartData} margin={{ top: 4, right: 28, left: -18, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-            {/* 左軸: 在庫・販売 */}
             <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-            {/* 右軸: 在庫月数 */}
             <YAxis
               yAxisId="right"
               orientation="right"
@@ -183,81 +181,43 @@ export default function LineCard({ line }: Props) {
               labelFormatter={(l) => `${l}月`}
             />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            {/* 棒グラフ: 月末在庫（左軸） */}
-            <Bar
-              yAxisId="left"
-              dataKey="monthEndInventory"
-              name="月末在庫"
-              fill={color}
-              opacity={0.7}
-              radius={[2, 2, 0, 0]}
-            />
-            {/* 折れ線: 販売計画（左軸） */}
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="salesPlan"
-              name="販売計画"
-              stroke="#16a34a"
-              strokeWidth={2}
-              dot={{ r: 3 }}
-            />
-            {/* 折れ線: 在庫月数（右軸） */}
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="monthEndInventoryMonths"
-              name="在庫月数"
-              stroke="#f59e0b"
-              strokeWidth={2}
-              strokeDasharray="4 2"
-              dot={{ r: 3 }}
-            />
+            <Bar yAxisId="left" dataKey="monthEndInventory" name="月末在庫" fill={color} opacity={0.7} radius={[2, 2, 0, 0]} />
+            <Line yAxisId="left" type="monotone" dataKey="salesPlan" name="販売計画" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
+            <Line yAxisId="right" type="monotone" dataKey="monthEndInventoryMonths" name="在庫月数" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 2" dot={{ r: 3 }} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      {/* ── Chart 2: 日量推移 + 日産能力ライン ── */}
+      {/* Chart 2: 日量推移 + 日産能力ライン */}
       <div>
-        <p className="text-[10px] text-gray-400 mb-1">日量推移（稼働日ベース）</p>
+        <p className="text-[10px] text-gray-400 mb-1">
+          日量推移（稼働日ベース）
+          {dailyCapacity > 0 && (
+            <span className="ml-2 text-gray-500">日産能力 {dailyCapacity.toLocaleString()} 台</span>
+          )}
+        </p>
         <ResponsiveContainer width="100%" height={120}>
           <LineChart data={chartData} margin={{ top: 4, right: 28, left: -18, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-            {/* domain を dailyCapacity まで伸ばして基準線が確実に見えるようにする */}
             <YAxis
               tick={{ fontSize: 10 }}
               domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, dailyCapacity) * 1.15)]}
             />
             <Tooltip
-              formatter={(v, name) => [
-                typeof v === "number" ? v.toLocaleString() : v,
-                name,
-              ]}
+              formatter={(v, name) => [typeof v === "number" ? v.toLocaleString() : v, name]}
               labelFormatter={(l) => `${l}月`}
             />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            {/* 折れ線: 日量 */}
-            <Line
-              type="monotone"
-              dataKey="dailyQuantity"
-              name="日量"
-              stroke={color}
-              strokeWidth={2}
-              dot={{ r: 3 }}
-            />
-            {/* 基準線: 日産能力 */}
-            <ReferenceLine
-              y={dailyCapacity}
-              stroke="#dc2626"
-              strokeDasharray="4 2"
-              label={{
-                value: `能力 ${dailyCapacity.toLocaleString()}`,
-                position: "insideTopRight",
-                fontSize: 9,
-                fill: "#dc2626",
-              }}
-            />
+            <Line type="monotone" dataKey="dailyQuantity" name="日量" stroke={color} strokeWidth={2} dot={{ r: 3 }} />
+            {dailyCapacity > 0 && (
+              <ReferenceLine
+                y={dailyCapacity}
+                stroke="#dc2626"
+                strokeDasharray="4 2"
+                label={{ value: `能力 ${dailyCapacity.toLocaleString()}`, position: "insideTopRight", fontSize: 9, fill: "#dc2626" }}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>

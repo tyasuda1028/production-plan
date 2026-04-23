@@ -7,12 +7,14 @@ import { Product } from "@/lib/types";
 import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import { Download, Database } from "lucide-react";
 
-const GROUP_COLORS = [
-  { header: "bg-blue-600",   total: "bg-blue-50"   },
-  { header: "bg-green-600",  total: "bg-green-50"  },
-  { header: "bg-amber-500",  total: "bg-amber-50"  },
-  { header: "bg-purple-600", total: "bg-purple-50" },
-  { header: "bg-rose-600",   total: "bg-rose-50"   },
+// 分類ごとのカラー（インデックスで循環）
+const CLASSIFICATION_COLORS = [
+  { header: "bg-blue-600",   total: "bg-blue-50",   border: "border-blue-300"   },
+  { header: "bg-emerald-600",total: "bg-emerald-50", border: "border-emerald-300"},
+  { header: "bg-amber-500",  total: "bg-amber-50",  border: "border-amber-300"  },
+  { header: "bg-purple-600", total: "bg-purple-50", border: "border-purple-300" },
+  { header: "bg-rose-600",   total: "bg-rose-50",   border: "border-rose-300"   },
+  { header: "bg-cyan-600",   total: "bg-cyan-50",   border: "border-cyan-300"   },
 ];
 
 const DOW_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -29,11 +31,17 @@ function buildMonthDays(ym: number) {
 }
 
 export default function ScheduleView() {
-  const { planBaseMonth, operatingDays: masterOperatingDays, lineMasters, productMasters } = useMasterStore();
+  const {
+    planBaseMonth,
+    operatingDays: masterOperatingDays,
+    lineMasters,
+    factoryMasters,
+    productMasters,
+  } = useMasterStore();
+
   const [search, setSearch] = useState("");
   const [selectedYM, setSelectedYM] = useState(planBaseMonth);
 
-  // 均等日量計画（全品目）
   const leveledPlansMap = useLeveledPlans();
 
   useMemo(() => { setSelectedYM(planBaseMonth); }, [planBaseMonth]);
@@ -54,10 +62,8 @@ export default function ScheduleView() {
   }
 
   function getDailyQty(p: Product): number {
-    // 計画6ヶ月は均等日量計画から取得
     const leveled = leveledPlansMap.get(p.id)?.get(selectedYM);
     if (leveled) return leveled.dailyQuantity;
-    // 範囲外の月は静的データにフォールバック
     const idx = getMonthPlanIdx(p);
     const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
     if (!mp || operatingDayNums.length === 0) return 0;
@@ -82,49 +88,228 @@ export default function ScheduleView() {
     );
   }, [search]);
 
-  const lineGroups = useMemo(() => {
-    return lineMasters
-      .map((lm) => ({
-        lineMaster: lm,
-        lineProducts: filteredProducts.filter((p) => p.primaryLine === lm.lineNumber),
-      }))
-      .filter((g) => g.lineProducts.length > 0);
-  }, [lineMasters, filteredProducts]);
+  // ── 工場 → 分類 → ライン の階層グループ ────────────────────────
+  const factoryGroups = useMemo(() => {
+    // 全分類リスト（色割り当て用）
+    const allClassifications: string[] = [];
+    lineMasters.forEach((l) => {
+      const cls = l.classification || "（未分類）";
+      if (!allClassifications.includes(cls)) allClassifications.push(cls);
+    });
 
-  const totalFiltered = lineGroups.reduce((s, g) => s + g.lineProducts.length, 0);
+    const groups = factoryMasters.map((factory) => {
+      const factoryLines = lineMasters
+        .filter((l) => l.factoryName === factory.factoryName)
+        .sort((a, b) => a.lineNumber - b.lineNumber);
 
+      // 分類ごとにグループ化
+      const classMap = new Map<string, typeof factoryLines>();
+      factoryLines.forEach((l) => {
+        const cls = l.classification || "（未分類）";
+        if (!classMap.has(cls)) classMap.set(cls, []);
+        classMap.get(cls)!.push(l);
+      });
+
+      const classifications = Array.from(classMap.entries()).map(([cls, lines]) => {
+        const colorIdx = allClassifications.indexOf(cls);
+        const color = CLASSIFICATION_COLORS[colorIdx % CLASSIFICATION_COLORS.length];
+        const lineGroups = lines.map((lm) => ({
+          lineMaster: lm,
+          lineProducts: filteredProducts.filter((p) => p.primaryLine === lm.lineNumber),
+        })).filter((g) => g.lineProducts.length > 0);
+
+        return { classification: cls, lines, lineGroups, color };
+      }).filter((c) => c.lineGroups.length > 0);
+
+      return { factory, classifications };
+    });
+
+    // 工場未登録ライン（孤立ライン）
+    const registeredFactoryNames = new Set(factoryMasters.map((f) => f.factoryName));
+    const orphanLines = lineMasters
+      .filter((l) => !registeredFactoryNames.has(l.factoryName))
+      .sort((a, b) => a.lineNumber - b.lineNumber);
+    const orphanGroups = orphanLines.map((lm) => ({
+      lineMaster: lm,
+      lineProducts: filteredProducts.filter((p) => p.primaryLine === lm.lineNumber),
+    })).filter((g) => g.lineProducts.length > 0);
+
+    return { groups, orphanGroups };
+  }, [factoryMasters, lineMasters, filteredProducts]);
+
+  const totalFiltered = useMemo(() => {
+    let count = 0;
+    factoryGroups.groups.forEach((fg) =>
+      fg.classifications.forEach((cg) =>
+        cg.lineGroups.forEach((lg) => { count += lg.lineProducts.length; })
+      )
+    );
+    factoryGroups.orphanGroups.forEach((og) => { count += og.lineProducts.length; });
+    return count;
+  }, [factoryGroups]);
+
+  // ── ライン別スケジュールテーブル ──────────────────────────────
+  function renderLineTable(
+    lineMaster: typeof lineMasters[number],
+    lineProducts: Product[],
+    color: typeof CLASSIFICATION_COLORS[number]
+  ) {
+    const lineDailyTotals: Record<number, number> = {};
+    lineProducts.forEach((p) => {
+      const dq = getDailyQty(p);
+      monthDays.forEach(({ day }) => {
+        if (isOperating(day)) {
+          lineDailyTotals[day] = (lineDailyTotals[day] ?? 0) + dq;
+        }
+      });
+    });
+    const lineMonthTotal = Object.values(lineDailyTotals).reduce((s, v) => s + v, 0);
+
+    return (
+      <div key={lineMaster.lineNumber} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        {/* ライン ヘッダー */}
+        <div className={`px-4 py-2 flex items-center gap-3 text-white ${color.header}`}>
+          <span className="text-sm font-bold">{lineMaster.lineName}</span>
+          <span className="text-xs opacity-80 font-mono">ライン {lineMaster.lineNumber}</span>
+          <span className="text-xs opacity-75">
+            日量能力 {(lineMaster.dailyCapacity ?? 0).toLocaleString()} 台/日
+          </span>
+          <span className="ml-auto text-xs opacity-75">{lineProducts.length} 品目</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="text-xs border-collapse min-w-max">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40">
+                  製造器種名
+                </th>
+                <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-16">
+                  月計画
+                </th>
+                {monthDays.map(({ day, dow }) => {
+                  const op = isOperating(day);
+                  return (
+                    <th
+                      key={day}
+                      className={`px-1 py-2 text-center font-medium min-w-10 whitespace-nowrap ${
+                        !op ? "bg-gray-100 text-gray-300" : "text-gray-600"
+                      }`}
+                    >
+                      <div>{day}</div>
+                      <div className={`text-[10px] ${dow === 0 ? "text-red-400" : dow === 6 ? "text-blue-400" : "text-gray-400"}`}>
+                        {DOW_LABELS[dow]}
+                      </div>
+                    </th>
+                  );
+                })}
+                <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap min-w-16">合計</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lineProducts.map((p) => {
+                const leveled = leveledPlansMap.get(p.id)?.get(selectedYM);
+                const idx = getMonthPlanIdx(p);
+                const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
+                const productionSchedule = leveled?.productionSchedule ?? mp?.productionSchedule;
+                const dq = getDailyQty(p);
+                const rowTotal = dq * operatingDayNums.length;
+
+                return (
+                  <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap border-r border-gray-200">
+                      <div className="font-medium text-gray-800 font-mono leading-tight">
+                        {p.manufacturingItemCode}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 text-right font-medium text-blue-700 border-r border-gray-200">
+                      {productionSchedule != null ? productionSchedule.toLocaleString() : "-"}
+                    </td>
+                    {monthDays.map(({ day }) => {
+                      const op = isOperating(day);
+                      if (!op) return (
+                        <td key={day} className="px-1 py-2 bg-gray-50 text-center text-gray-200">-</td>
+                      );
+                      return (
+                        <td key={day} className="px-1 py-2 text-center text-gray-700 hover:bg-blue-50">
+                          {dq > 0 ? dq.toLocaleString() : <span className="text-gray-200">0</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-2 text-right font-semibold text-gray-800">
+                      {rowTotal.toLocaleString()}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {/* ライン合計行 */}
+              <tr className={`border-t-2 border-gray-300 ${color.total}`}>
+                <td className={`sticky left-0 z-10 px-3 py-2 font-bold border-r border-gray-200 whitespace-nowrap ${color.total}`}>
+                  {lineMaster.lineName} 合計
+                </td>
+                <td className="px-2 py-2 border-r border-gray-200" />
+                {monthDays.map(({ day }) => (
+                  <td key={day} className={`px-1 py-2 text-center font-semibold ${isOperating(day) ? "text-gray-800" : "text-gray-200"}`}>
+                    {isOperating(day) ? (lineDailyTotals[day] ?? 0).toLocaleString() : "-"}
+                  </td>
+                ))}
+                <td className="px-2 py-2 text-right font-bold text-gray-900">
+                  {lineMonthTotal.toLocaleString()}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // ── CSV エクスポート（工場 → 分類 → ライン順） ────────────────
   function handleCsvExport() {
-    const exportMonths = getPlanMonths(planBaseMonth); // 先6ヶ月
+    const exportMonths = getPlanMonths(planBaseMonth);
     const allRows: string[][] = [];
+
+    // 工場 → 分類 → ライン の順序でラインリストを構築
+    const orderedLines: typeof lineMasters = [];
+    factoryMasters.forEach((factory) => {
+      const factoryLines = lineMasters.filter((l) => l.factoryName === factory.factoryName);
+      const clsMap = new Map<string, typeof lineMasters>();
+      factoryLines.forEach((l) => {
+        const cls = l.classification || "（未分類）";
+        if (!clsMap.has(cls)) clsMap.set(cls, []);
+        clsMap.get(cls)!.push(l);
+      });
+      clsMap.forEach((lines) => lines.sort((a, b) => a.lineNumber - b.lineNumber).forEach((l) => orderedLines.push(l)));
+    });
+    // 孤立ライン
+    const registeredFactoryNames = new Set(factoryMasters.map((f) => f.factoryName));
+    lineMasters.filter((l) => !registeredFactoryNames.has(l.factoryName))
+      .sort((a, b) => a.lineNumber - b.lineNumber)
+      .forEach((l) => orderedLines.push(l));
 
     exportMonths.forEach((ym, monthIdx) => {
       const mDays = buildMonthDays(ym);
-
-      // 稼働日取得
       const masterEntry = masterOperatingDays.find((o) => o.yearMonth === ym);
       const opNums = masterEntry
         ? masterEntry.operatingDates
         : mDays.filter((d) => d.dow !== 0 && d.dow !== 6).map((d) => d.day);
       const isOp = (day: number) => opNums.includes(day);
 
-      // 月区切り
       if (monthIdx > 0) allRows.push([]);
       const ymStr = String(ym);
       allRows.push([`■ ${ymStr.slice(0, 4)}年${ymStr.slice(4)}月（稼働日 ${opNums.length}日）`]);
 
-      // 列ヘッダー
       const dayHeaders = mDays.map(({ day, dow }) => `${day}(${DOW_LABELS[dow]})`);
-      allRows.push(["ライン", "製造器種名", "月計画（台）", ...dayHeaders, "合計"]);
+      allRows.push(["工場", "分類", "ライン", "製造器種名", "月計画（台）", ...dayHeaders, "合計"]);
 
-      // ライン別データ
-      lineMasters.forEach((lm) => {
+      orderedLines.forEach((lm) => {
         const lps = products.filter((p) => p.primaryLine === lm.lineNumber);
         if (lps.length === 0) return;
 
         const lineDayTotals: number[] = mDays.map(() => 0);
 
         lps.forEach((p) => {
-          // 均等日量計画を使用（なければ静的データにフォールバック）
           const leveled = leveledPlansMap.get(p.id)?.get(ym);
           const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
           const prodSchedule = leveled?.productionSchedule ?? mp?.productionSchedule ?? 0;
@@ -137,6 +322,8 @@ export default function ScheduleView() {
             return v;
           });
           allRows.push([
+            lm.factoryName,
+            lm.classification,
             lm.lineName,
             p.manufacturingItemCode,
             String(prodSchedule),
@@ -145,9 +332,8 @@ export default function ScheduleView() {
           ]);
         });
 
-        // ライン合計行
         allRows.push([
-          `【${lm.lineName} 合計】`, "", "",
+          lm.factoryName, lm.classification, `【${lm.lineName} 合計】`, "", "",
           ...lineDayTotals.map(String),
           String(lineDayTotals.reduce((s, v) => s + v, 0)),
         ]);
@@ -166,11 +352,10 @@ export default function ScheduleView() {
     URL.revokeObjectURL(url);
   }
 
-  // 基幹システム用CSV: 製品コード × 月日（横軸）のワイドフォーマット
+  // 基幹システム用CSV
   function handleKikanCsvExport() {
     const exportMonths = getPlanMonths(planBaseMonth);
 
-    // 全月の稼働日・日量を事前計算
     type MonthMeta = { ym: number; opNums: number[]; dqMap: Map<string, number> };
     const monthMetas: MonthMeta[] = exportMonths.map((ym) => {
       const mDays = buildMonthDays(ym);
@@ -180,42 +365,33 @@ export default function ScheduleView() {
         : mDays.filter((d) => d.dow !== 0 && d.dow !== 6).map((d) => d.day);
       const dqMap = new Map<string, number>();
       products.forEach((p) => {
-        // 均等日量計画を優先、なければ静的データにフォールバック
         const leveled = leveledPlansMap.get(p.id)?.get(ym);
         if (leveled) {
           dqMap.set(p.id, leveled.dailyQuantity);
         } else {
           const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
-          const dq = mp && opNums.length > 0
-            ? Math.round(mp.productionSchedule / opNums.length)
-            : 0;
-          dqMap.set(p.id, dq);
+          dqMap.set(p.id, mp && opNums.length > 0 ? Math.round(mp.productionSchedule / opNums.length) : 0);
         }
       });
       return { ym, opNums, dqMap };
     });
 
-    // 横軸: 全月の全カレンダー日 → YYYY/MM/DD
     type DayCol = { ym: number; day: number; label: string };
     const dayCols: DayCol[] = [];
     monthMetas.forEach(({ ym }) => {
-      const mDays = buildMonthDays(ym);
       const ymStr = String(ym);
-      mDays.forEach(({ day }) => {
+      buildMonthDays(ym).forEach(({ day }) => {
         const dd = String(day).padStart(2, "0");
         dayCols.push({ ym, day, label: `${ymStr.slice(0, 4)}/${ymStr.slice(4)}/${dd}` });
       });
     });
 
-    // ヘッダー行
+    const codeMap = new Map(productMasters.map((pm) => [pm.modelCode, pm.code]));
+
     const rows: string[][] = [
       ["製品コード", "製造器種名", "ライン", ...dayCols.map((c) => c.label)],
     ];
 
-    // 製造器種名 → 製品コードのマップ（productMasters から引く）
-    const codeMap = new Map(productMasters.map((pm) => [pm.modelCode, pm.code]));
-
-    // データ行: 全品目（フィルタなし）
     products.forEach((p) => {
       const productCode = codeMap.get(p.manufacturingItemCode) || p.manufacturingItemCode;
       const dayValues = dayCols.map(({ ym, day }) => {
@@ -278,141 +454,60 @@ export default function ScheduleView() {
         </span>
       </div>
 
-      {/* ライン別テーブル */}
-      {lineGroups.map(({ lineMaster, lineProducts }, groupIdx) => {
-        const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length];
-
-        const lineDailyTotals: Record<number, number> = {};
-        lineProducts.forEach((p) => {
-          const dq = getDailyQty(p);
-          monthDays.forEach(({ day }) => {
-            if (isOperating(day)) {
-              lineDailyTotals[day] = (lineDailyTotals[day] ?? 0) + dq;
-            }
-          });
-        });
-        const lineMonthTotal = Object.values(lineDailyTotals).reduce((s, v) => s + v, 0);
-
+      {/* 工場 → 分類 → ライン の階層 */}
+      {factoryGroups.groups.map(({ factory, classifications }) => {
+        if (classifications.length === 0) return null;
         return (
-          <div key={lineMaster.lineNumber} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            {/* ライン ヘッダー */}
-            <div className={`px-4 py-2.5 flex items-center gap-3 text-white ${color.header}`}>
-              <span className="text-sm font-bold">{lineMaster.lineName}</span>
-              <span className="text-xs opacity-80">{lineMaster.factoryName}</span>
-              <span className="text-xs opacity-75">
-                日量能力 {lineMaster.dailyCapacity.toLocaleString()} 台/日
-              </span>
-              <span className="ml-auto text-xs opacity-75">{lineProducts.length} 品目</span>
+          <div key={factory.factoryName} className="space-y-4">
+            {/* 工場ヘッダー */}
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <div className="flex items-center gap-2 px-1">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">工場</span>
+                <span className="text-sm font-bold text-gray-700">{factory.factoryName}</span>
+                {factory.factoryNumber && (
+                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">
+                    #{factory.factoryNumber}
+                  </span>
+                )}
+              </div>
+              <div className="h-px flex-1 bg-gray-200" />
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="text-xs border-collapse min-w-max">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40">
-                      製造器種名
-                    </th>
-                    <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-16">
-                      月計画
-                    </th>
-                    {monthDays.map(({ day, dow }) => {
-                      const op = isOperating(day);
-                      return (
-                        <th
-                          key={day}
-                          className={`px-1 py-2 text-center font-medium min-w-10 whitespace-nowrap ${
-                            !op ? "bg-gray-100 text-gray-300" : "text-gray-600"
-                          }`}
-                        >
-                          <div>{day}</div>
-                          <div
-                            className={`text-[10px] ${
-                              dow === 0
-                                ? "text-red-400"
-                                : dow === 6
-                                ? "text-blue-400"
-                                : "text-gray-400"
-                            }`}
-                          >
-                            {DOW_LABELS[dow]}
-                          </div>
-                        </th>
-                      );
-                    })}
-                    <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap min-w-16">
-                      合計
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lineProducts.map((p) => {
-                    const leveled = leveledPlansMap.get(p.id)?.get(selectedYM);
-                    const idx = getMonthPlanIdx(p);
-                    const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
-                    const productionSchedule = leveled?.productionSchedule ?? mp?.productionSchedule;
-                    const dq = getDailyQty(p);
-                    const rowTotal = dq * operatingDayNums.length;
+            {/* 分類ごと */}
+            {classifications.map(({ classification, lineGroups, color }) => (
+              <div key={classification} className="space-y-3">
+                {/* 分類ラベル */}
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded border-l-4 bg-gray-50 ${color.border}`}>
+                  <span className="text-sm font-semibold text-gray-700">{classification}</span>
+                  <span className="text-xs text-gray-400">{lineGroups.length} ライン</span>
+                </div>
 
-                    return (
-                      <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap border-r border-gray-200">
-                          <div className="font-medium text-gray-800 font-mono leading-tight">
-                            {p.manufacturingItemCode}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 text-right font-medium text-blue-700 border-r border-gray-200">
-                          {productionSchedule != null ? productionSchedule.toLocaleString() : "-"}
-                        </td>
-                        {monthDays.map(({ day }) => {
-                          const op = isOperating(day);
-                          if (!op) {
-                            return (
-                              <td key={day} className="px-1 py-2 bg-gray-50 text-center text-gray-200">
-                                -
-                              </td>
-                            );
-                          }
-                          return (
-                            <td key={day} className="px-1 py-2 text-center text-gray-700 hover:bg-blue-50">
-                              {dq > 0 ? dq.toLocaleString() : <span className="text-gray-200">0</span>}
-                            </td>
-                          );
-                        })}
-                        <td className="px-2 py-2 text-right font-semibold text-gray-800">
-                          {rowTotal.toLocaleString()}
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {/* ライン合計行 */}
-                  <tr className={`border-t-2 border-gray-300 ${color.total}`}>
-                    <td
-                      className={`sticky left-0 z-10 px-3 py-2 font-bold border-r border-gray-200 whitespace-nowrap ${color.total}`}
-                    >
-                      {lineMaster.lineName} 合計
-                    </td>
-                    <td className="px-2 py-2 border-r border-gray-200" />
-                    {monthDays.map(({ day }) => (
-                      <td
-                        key={day}
-                        className={`px-1 py-2 text-center font-semibold ${
-                          isOperating(day) ? "text-gray-800" : "text-gray-200"
-                        }`}
-                      >
-                        {isOperating(day) ? (lineDailyTotals[day] ?? 0).toLocaleString() : "-"}
-                      </td>
-                    ))}
-                    <td className="px-2 py-2 text-right font-bold text-gray-900">
-                      {lineMonthTotal.toLocaleString()}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                {/* ライン別テーブル */}
+                <div className="space-y-3 pl-3">
+                  {lineGroups.map(({ lineMaster, lineProducts }) =>
+                    renderLineTable(lineMaster, lineProducts, color)
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         );
       })}
+
+      {/* 工場未登録ライン */}
+      {factoryGroups.orphanGroups.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-semibold text-gray-400">工場未登録ライン</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+          {factoryGroups.orphanGroups.map(({ lineMaster, lineProducts }, i) =>
+            renderLineTable(lineMaster, lineProducts, CLASSIFICATION_COLORS[i % CLASSIFICATION_COLORS.length])
+          )}
+        </div>
+      )}
 
       {totalFiltered === 0 && (
         <div className="py-16 text-center text-gray-400 text-sm bg-white border border-gray-200 rounded-lg">

@@ -54,15 +54,21 @@ function EditableCell({ value, onChange, placeholder, className }: {
 }
 
 export default function ProductMasterTab() {
-  const { productMasters, addProduct, updateProduct, deleteProduct, importProducts, lineMasters } = useMasterStore();
-  const [editing, setEditing] = useState<string | null>(null); // modelCode をキーとして使用
+  const { productMasters, addProduct, updateProduct, deleteProduct, importProducts, lineMasters, factoryMasters } = useMasterStore();
+  const [editing, setEditing] = useState<string | null>(null);
   const [editBuf, setEditBuf] = useState<ProductMaster>(emptyProduct());
   const [adding, setAdding] = useState(false);
   const [newBuf, setNewBuf] = useState<ProductMaster>(emptyProduct());
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState("");
 
-  // 行キー: modelCode 優先、なければ code
+  // ライン番号 → 工場名
+  function factoryNameForLine(lineNumber: number): string {
+    const lm = lineMasters.find((l) => l.lineNumber === lineNumber);
+    if (!lm) return "—";
+    return lm.factoryName || "—";
+  }
+
   const rowKey = (p: ProductMaster) => p.modelCode || p.code || Math.random().toString();
 
   function startEdit(p: ProductMaster) {
@@ -125,9 +131,7 @@ export default function ProductMasterTab() {
 
   function EditRow({ isNew }: { isNew?: boolean }) {
     const buf = isNew ? newBuf : editBuf;
-    const setBuf = isNew
-      ? (v: ProductMaster) => setNewBuf(v)
-      : (v: ProductMaster) => setEditBuf(v);
+    const setBuf = isNew ? (v: ProductMaster) => setNewBuf(v) : (v: ProductMaster) => setEditBuf(v);
     const onSave = isNew ? saveNew : saveEdit;
     const onCancel = isNew ? () => setAdding(false) : () => setEditing(null);
 
@@ -137,12 +141,11 @@ export default function ProductMasterTab() {
           <EditableCell value={buf.code} onChange={(v) => setBuf({ ...buf, code: v })} placeholder="品目コード（任意）" />
         </td>
         <td className="px-3 py-2">
-          <div className="space-y-1">
-            <EditableCell value={buf.modelCode} onChange={(v) => setBuf({ ...buf, modelCode: v })} placeholder="FHE-16AW1-G" />
-            {buf.code && (
-              <div className="text-[10px] text-gray-400 font-mono px-1">コード: {buf.code}</div>
-            )}
-          </div>
+          <EditableCell value={buf.modelCode} onChange={(v) => setBuf({ ...buf, modelCode: v })} placeholder="FHE-16AW1-G" />
+        </td>
+        {/* 工場（ライン選択から自動導出・読み取り専用） */}
+        <td className="px-3 py-2 text-center text-xs text-gray-400">
+          {factoryNameForLine(buf.primaryLine)}
         </td>
         <td className="px-3 py-2">
           <select value={buf.primaryLine} onChange={(e) => setBuf({ ...buf, primaryLine: +e.target.value })}
@@ -213,7 +216,8 @@ export default function ProductMasterTab() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">品目コード</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">製造器種名<span className="ml-1 text-[10px] text-gray-400">（例: FHE-16AW1-G）</span></th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">製造器種名</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">工場名</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">ライン</th>
                 <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">個/パレット</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">パレット型</th>
@@ -225,18 +229,20 @@ export default function ProductMasterTab() {
               {adding && <EditRow isNew />}
               {productMasters.map((p) => {
                 const key = rowKey(p);
+                const factoryName = factoryNameForLine(p.primaryLine);
+                const lineMaster = lineMasters.find((l) => l.lineNumber === p.primaryLine);
                 return editing === key ? (
                   <EditRow key={key} />
                 ) : (
                   <tr key={key} className={`hover:bg-gray-50 ${!p.active ? "opacity-40" : ""}`}>
-                    <td className="px-3 py-2.5 text-xs font-mono font-semibold text-gray-800">{p.code}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono font-semibold text-gray-800">{p.code || <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <div className="text-xs font-mono font-medium text-gray-800">{p.modelCode}</div>
-                      {p.code && (
-                        <div className="text-[10px] text-gray-400 font-mono mt-0.5">コード: {p.code}</div>
-                      )}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-center text-gray-600">{p.primaryLine}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{factoryName}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+                      {lineMaster ? lineMaster.lineName : <span className="text-gray-400">ライン{p.primaryLine}</span>}
+                    </td>
                     <td className="px-3 py-2.5 text-xs text-right text-gray-600">{p.capacityPerPallet}</td>
                     <td className="px-3 py-2.5 text-xs">
                       <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">{p.palletType}</span>
