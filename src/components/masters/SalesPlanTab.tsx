@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { products } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { getPlanMonths, formatYearMonth } from "@/lib/data";
+import { ProductMaster } from "@/lib/masterTypes";
 import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 
 // ── CSV インポート関連型 ──
@@ -19,9 +20,11 @@ interface PreviewRow {
 function CsvImportSection({
   planMonths,
   onImport,
+  productMasters,
 }: {
   planMonths: number[];
   onImport: (rows: PreviewRow[]) => void;
+  productMasters: ProductMaster[];
 }) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
@@ -30,18 +33,29 @@ function CsvImportSection({
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 製造器種名 → product の逆引きマップ
-  const productByCode = useMemo(
+  // 製造器種名 → product の逆引きマップ（製造器種名ベースの後方互換用）
+  const productByModelCode = useMemo(
     () => new Map(products.map((p) => [p.manufacturingItemCode, p])),
     []
   );
+
+  // 品目コード → product のマップ（productMasters 経由）
+  const productByItemCode = useMemo(() => {
+    const map = new Map<string, typeof products[number]>();
+    productMasters.forEach((pm) => {
+      if (!pm.code) return;
+      const product = productByModelCode.get(pm.modelCode);
+      if (product) map.set(pm.code, product);
+    });
+    return map;
+  }, [productMasters, productByModelCode]);
 
   function parseCSV(text: string): PreviewRow[] {
     const cleaned = text.replace(/^\uFEFF/, ""); // BOM除去
     const lines = cleaned.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error("データが不足しています");
 
-    // ヘッダー行: 製造器種名, YYYYMM, YYYYMM, ...
+    // ヘッダー行: 品目コード, [製造器種名（参考）], YYYYMM, YYYYMM, ...
     const headers = lines[0].split(",").map((s) => s.trim());
     const monthCols: { colIdx: number; ym: number }[] = [];
     for (let i = 1; i < headers.length; i++) {
@@ -53,16 +67,17 @@ function CsvImportSection({
     const rows: PreviewRow[] = [];
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(",").map((s) => s.trim());
-      const code = cols[0];
-      if (!code) continue;
-      const product = productByCode.get(code);
+      const itemCode = cols[0];
+      if (!itemCode) continue;
+      // 品目コードで検索（製造器種名での後方互換検索も行う）
+      const product = productByItemCode.get(itemCode) ?? productByModelCode.get(itemCode);
       const plans = monthCols.map(({ colIdx, ym }) => ({
         yearMonth: ym,
         salesPlan: Math.max(0, parseInt(cols[colIdx] ?? "0") || 0),
       }));
       rows.push({
         productId: product?.id ?? "",
-        manufacturingItemCode: code,
+        manufacturingItemCode: product?.manufacturingItemCode ?? itemCode,
         productName: product?.productName ?? "",
         plans,
         isKnown: !!product,
@@ -107,14 +122,17 @@ function CsvImportSection({
     setTimeout(() => setSuccess(""), 5000);
   }
 
+  // テンプレートDL: 品目コード, 製造器種名（参考）, YYYYMM...
   function downloadTemplate() {
-    const header = ["製造器種名", ...planMonths.map(String)].join(",");
-    const rows = products.map((p) => {
+    const header = ["品目コード", "製造器種名（参考）", ...planMonths.map(String)].join(",");
+    const rows: string[] = [];
+    productMasters.forEach((pm) => {
+      const product = productByModelCode.get(pm.modelCode);
       const vals = planMonths.map((ym) => {
-        const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
+        const mp = product?.monthlyPlans.find((m) => m.yearMonth === ym);
         return mp?.salesPlan ?? 0;
       });
-      return [p.manufacturingItemCode, ...vals].join(",");
+      rows.push([pm.code, pm.modelCode, ...vals].join(","));
     });
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -145,8 +163,8 @@ function CsvImportSection({
           {/* CSV仕様とテンプレート */}
           <div className="flex items-start justify-between gap-4 mt-3">
             <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 flex-1">
-              <strong>CSV形式（ワイド形式）：</strong> 1行目ヘッダー（製造器種名, YYYYMM, YYYYMM, ...）、2行目以降がデータ行
-              <br />例：<code className="bg-blue-100 px-1 rounded">FHE-16AW1-G,500,520,540,560,580,600</code>
+              <strong>CSV形式（ワイド形式）：</strong> 1行目ヘッダー（品目コード, 製造器種名（参考）, YYYYMM, ...）、2行目以降がデータ行
+              <br />例：<code className="bg-blue-100 px-1 rounded">10001,FHE-16AW1-G,500,520,540,560,580,600</code>
             </div>
             <button
               onClick={downloadTemplate}
@@ -168,7 +186,7 @@ function CsvImportSection({
             >
               <Upload className="w-7 h-7 text-gray-300 mx-auto mb-2" />
               <p className="text-sm text-gray-500">CSVファイルをドロップ または クリックして選択</p>
-              <p className="text-xs text-gray-400 mt-1">製造器種名, {planMonths.map(String).join(", ")}</p>
+              <p className="text-xs text-gray-400 mt-1">品目コード, 製造器種名（参考）, {planMonths.map(String).join(", ")}</p>
               <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
             </div>
           )}
@@ -314,6 +332,37 @@ export default function SalesPlanTab() {
     });
   }
 
+  // 製造器種名 → product の逆引きマップ
+  const productByModelCode = useMemo(
+    () => new Map(products.map((p) => [p.manufacturingItemCode, p])),
+    []
+  );
+
+  // 現在の販売計画（入力値 or デフォルト値）を CSV でエクスポート
+  function handleCsvExport() {
+    const header = ["品目コード", "製造器種名（参考）", ...planMonths.map(String)].join(",");
+    const rows: string[] = [];
+    productMasters.forEach((pm) => {
+      const product = productByModelCode.get(pm.modelCode);
+      const vals = planMonths.map((ym) => {
+        const override = salesPlanOverrides.find(
+          (o) => o.productId === product?.id && o.yearMonth === ym
+        );
+        if (override !== undefined) return override.salesPlan;
+        return product?.monthlyPlans.find((m) => m.yearMonth === ym)?.salesPlan ?? 0;
+      });
+      rows.push([pm.code, pm.modelCode, ...vals].join(","));
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `販売計画_${planMonths[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const overrideCount = salesPlanOverrides.filter((o) =>
     planMonths.includes(o.yearMonth)
   ).length;
@@ -327,8 +376,19 @@ export default function SalesPlanTab() {
         元の計画値に戻すには各行の <strong>↩</strong> ボタン、またはCSVインポートで上書きできます。
       </div>
 
+      {/* ツールバー：一括DL */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleCsvExport}
+          className="flex items-center gap-1.5 text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50"
+        >
+          <Download className="w-3.5 h-3.5" />現在の販売計画をDL
+        </button>
+        <span className="text-xs text-gray-400">（入力値を反映した現在の計画値）</span>
+      </div>
+
       {/* CSVインポートアコーディオン */}
-      <CsvImportSection planMonths={planMonths} onImport={handleCsvImport} />
+      <CsvImportSection planMonths={planMonths} onImport={handleCsvImport} productMasters={productMasters} />
 
       {/* 検索バー */}
       <div className="flex items-center gap-3">
