@@ -6,9 +6,9 @@ import { FactoryMaster } from "@/lib/masterTypes";
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
 
 const emptyFactory = (): FactoryMaster => ({
+  factoryNumber: "",
   factoryName: "",
   classification: "",
-  note: "",
 });
 
 function EditableCell({
@@ -44,7 +44,7 @@ export default function FactoryMasterTab() {
   const [newBuf, setNewBuf] = useState<FactoryMaster>(emptyFactory());
   const [addError, setAddError] = useState("");
 
-  // 工場ごとのライン数
+  // 工場ごとのライン本数（ラインマスターから自動集計）
   const lineCountByFactory = (factoryName: string) =>
     lineMasters.filter((l) => l.factoryName === factoryName).length;
 
@@ -57,19 +57,17 @@ export default function FactoryMasterTab() {
   }
 
   function saveEdit() {
-    if (!editBuf.factoryName.trim()) { return; }
-    // 工場名が変わった場合、重複チェック
+    if (!editBuf.factoryName.trim()) return;
     if (
       editBuf.factoryName !== editOriginalName &&
       factoryMasters.some((f) => f.factoryName === editBuf.factoryName)
     ) {
       return;
     }
-    // 工場名が変わった場合は削除して追加（主キー変更）
     if (editBuf.factoryName !== editOriginalName) {
+      // 工場名（主キー）変更 → 関連ラインマスターも更新
       deleteFactory(editOriginalName);
       addFactory(editBuf);
-      // 関連するラインマスターの工場名も更新
       useMasterStore.setState((s) => ({
         lineMasters: s.lineMasters.map((l) =>
           l.factoryName === editOriginalName
@@ -132,7 +130,8 @@ export default function FactoryMasterTab() {
     <div className="space-y-4">
       {/* 説明 */}
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        工場名・分類を管理します。ラインマスターで工場を選択すると、分類が自動補完されます。
+        工場番号・工場名・分類を管理します。ラインマスターで工場を選択すると分類が自動補完されます。
+        ライン本数はラインマスターの登録数から自動集計されます。
       </div>
 
       {/* 追加ボタン */}
@@ -151,10 +150,10 @@ export default function FactoryMasterTab() {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">工場番号</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">工場名</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">分類</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">備考</th>
-              <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-400 whitespace-nowrap">ライン数</th>
+              <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 whitespace-nowrap">ライン本数</th>
               <th className="px-4 py-2.5 w-20" />
             </tr>
           </thead>
@@ -162,6 +161,13 @@ export default function FactoryMasterTab() {
             {/* 追加行 */}
             {adding && (
               <tr className="bg-blue-50/60 border-b border-blue-200">
+                <td className="px-4 py-2 w-24">
+                  <EditableCell
+                    value={newBuf.factoryNumber}
+                    onChange={(v) => { setNewBuf({ ...newBuf, factoryNumber: v }); setAddError(""); }}
+                    placeholder="例: 01"
+                  />
+                </td>
                 <td className="px-4 py-2">
                   <EditableCell
                     value={newBuf.factoryName}
@@ -174,13 +180,6 @@ export default function FactoryMasterTab() {
                     value={newBuf.classification}
                     onChange={(v) => setNewBuf({ ...newBuf, classification: v })}
                     placeholder="例: ブライツ"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <EditableCell
-                    value={newBuf.note}
-                    onChange={(v) => setNewBuf({ ...newBuf, note: v })}
-                    placeholder="任意"
                   />
                 </td>
                 <td />
@@ -201,6 +200,13 @@ export default function FactoryMasterTab() {
               editing === f.factoryName ? (
                 /* 編集行 */
                 <tr key={f.factoryName} className="bg-blue-50/60">
+                  <td className="px-4 py-2 w-24">
+                    <EditableCell
+                      value={editBuf.factoryNumber}
+                      onChange={(v) => setEditBuf({ ...editBuf, factoryNumber: v })}
+                      placeholder="例: 01"
+                    />
+                  </td>
                   <td className="px-4 py-2">
                     <EditableCell
                       value={editBuf.factoryName}
@@ -215,15 +221,9 @@ export default function FactoryMasterTab() {
                       placeholder="例: ブライツ"
                     />
                   </td>
-                  <td className="px-4 py-2">
-                    <EditableCell
-                      value={editBuf.note}
-                      onChange={(v) => setEditBuf({ ...editBuf, note: v })}
-                      placeholder="任意"
-                    />
-                  </td>
-                  <td className="px-4 py-2 text-center text-xs text-gray-400">
+                  <td className="px-4 py-2 text-center text-xs text-gray-500">
                     {lineCountByFactory(f.factoryName)}
+                    <span className="text-gray-400 ml-0.5">本</span>
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex gap-1 justify-end">
@@ -239,18 +239,18 @@ export default function FactoryMasterTab() {
               ) : (
                 /* 表示行 */
                 <tr key={f.factoryName} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 text-xs font-mono text-gray-500">{f.factoryNumber || <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-2.5 text-xs font-semibold text-gray-800">{f.factoryName}</td>
                   <td className="px-4 py-2.5">
                     <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-medium">
                       {f.classification}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">{f.note || <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-2.5 text-center">
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs font-semibold text-gray-700">
                       {lineCountByFactory(f.factoryName)}
-                      <span className="text-gray-400 ml-0.5">本</span>
                     </span>
+                    <span className="text-xs text-gray-400 ml-0.5">本</span>
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex gap-1 justify-end">
@@ -272,7 +272,6 @@ export default function FactoryMasterTab() {
           <div className="py-8 text-center text-gray-400 text-sm">工場が登録されていません</div>
         )}
 
-        {/* エラー */}
         {addError && (
           <div className="px-4 py-2 text-xs text-red-600 bg-red-50 border-t border-red-100">
             {addError}

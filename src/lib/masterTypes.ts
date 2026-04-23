@@ -17,9 +17,10 @@ export const PALLET_TYPES: Record<string, { name: string; size: string }> = {
 
 // ========== 工場マスター ==========
 export interface FactoryMaster {
+  factoryNumber: string;  // 工場番号（例: 02）
   factoryName: string;    // 工場名（主キー・例: 02工場）
   classification: string; // 分類（例: ブライツ）
-  note: string;           // 備考
+  // ライン本数はラインマスターから自動集計
 }
 
 // ========== ラインマスター ==========

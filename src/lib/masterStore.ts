@@ -38,7 +38,7 @@ function buildDefaultOperatingDays(): OperatingDaysMaster[] {
 
 // デフォルト工場マスター
 const defaultFactoryMasters: FactoryMaster[] = [
-  { factoryName: "02工場", classification: "ブライツ", note: "" },
+  { factoryNumber: "02", factoryName: "02工場", classification: "ブライツ" },
 ];
 
 // デフォルトラインマスター
