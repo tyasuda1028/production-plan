@@ -8,6 +8,19 @@ import { Plus, Pencil, Trash2, Upload, Download, Check, X } from "lucide-react";
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
 const METHOD_OPTIONS = ["A:主力製品", "B:在庫製品", "C:計画生産", "D:受注生産"];
 
+// 生産方式の正規化（"B" や文字化け → "B:在庫製品" など）
+const METHOD_PREFIX_MAP: Record<string, string> = {
+  A: "A:主力製品",
+  B: "B:在庫製品",
+  C: "C:計画生産",
+  D: "D:受注生産",
+};
+function normalizeMethod(m: string): string {
+  if (METHOD_OPTIONS.includes(m)) return m;           // 既に正しい形式
+  const key = (m ?? "").charAt(0).toUpperCase();
+  return METHOD_PREFIX_MAP[key] ?? "B:在庫製品";       // 先頭文字で判定、不明は B
+}
+
 const emptyProduct = (): ProductMaster => ({
   code: "",
   modelCode: "",
@@ -73,7 +86,19 @@ export default function ProductMasterTab() {
 
   function startEdit(p: ProductMaster) {
     setEditing(rowKey(p));
-    setEditBuf({ ...p });
+    setEditBuf({ ...p, productionMethod: normalizeMethod(p.productionMethod) });
+  }
+
+  // 生産方式を一括正規化
+  function fixAllMethods() {
+    useMasterStore.setState((s) => ({
+      productMasters: s.productMasters.map((p) => ({
+        ...p,
+        productionMethod: normalizeMethod(p.productionMethod),
+      })),
+    }));
+    setImportSuccess("生産方式を一括修正しました");
+    setTimeout(() => setImportSuccess(""), 3000);
   }
 
   function saveEdit() {
@@ -113,7 +138,7 @@ export default function ProductMasterTab() {
             capacityPerPallet: parseInt(cap) || 20,
             palletType: (["P01","P02","P03"].includes(pallet) ? pallet : "P01") as ProductMaster["palletType"],
             primaryLine: parseInt(line) || 2,
-            productionMethod: method || "B:在庫製品",
+            productionMethod: normalizeMethod(method || "B"),
             active: true,
           });
         }
@@ -199,6 +224,10 @@ export default function ProductMasterTab() {
           <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
         </label>
         <CsvExportButton products={productMasters} />
+        <button onClick={fixAllMethods}
+          className="flex items-center gap-1.5 text-xs border border-orange-300 text-orange-700 rounded px-3 py-1.5 hover:bg-orange-50">
+          生産方式を一括修正
+        </button>
         {importSuccess && <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">{importSuccess}</span>}
         {importError && <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">{importError}</span>}
         <span className="ml-auto text-xs text-gray-400">{productMasters.length} 品目</span>
@@ -248,7 +277,7 @@ export default function ProductMasterTab() {
                       <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">{p.palletType}</span>
                       <span className="ml-1 text-gray-400 text-[10px]">{PALLET_TYPES[p.palletType]?.size}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{p.productionMethod}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{normalizeMethod(p.productionMethod)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1">
                         <button onClick={() => startEdit(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
