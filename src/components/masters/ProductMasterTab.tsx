@@ -128,17 +128,34 @@ export default function ProductMasterTab() {
       try {
         const text = (ev.target?.result as string).replace(/^\uFEFF/, "");
         const lines = text.split(/\r?\n/).filter((l) => l.trim());
+        if (lines.length < 2) { setImportError("データが不足しています"); return; }
+
+        // ヘッダー行で列位置を動的に判定
+        const headers = lines[0].split(",").map((s) => s.trim().toLowerCase());
+        const hasGasType = headers.some((h) => h.includes("ガス") || h === "gas");
+
         const rows: ProductMaster[] = [];
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(",").map((s) => s.trim());
-          const [code, modelCode, gasType, cap, pallet, line, method] = cols;
+          // ガス種列あり: [code, modelCode, gasType, cap, pallet, line, method]
+          // ガス種列なし: [code, modelCode, cap, pallet, line, method]
+          const code      = cols[0] ?? "";
+          const modelCode = cols[1] ?? "";
           if (!modelCode) continue;
+
+          let gasType = "", cap: string, pallet: string, line: string, method: string;
+          if (hasGasType) {
+            [, , gasType, cap, pallet, line, method] = cols;
+          } else {
+            [, , cap, pallet, line, method] = cols;
+          }
+
           rows.push({
-            code: code ?? "",
+            code,
             modelCode,
-            gasType: (["P", "12A"].includes(gasType ?? "") ? gasType : "") as string,
+            gasType: gasType ?? "",
             capacityPerPallet: parseInt(cap) || 20,
-            palletType: (["P01","P02","P03"].includes(pallet) ? pallet : "P01") as ProductMaster["palletType"],
+            palletType: (["P01","P02","P03"].includes(pallet ?? "") ? pallet : "P01") as ProductMaster["palletType"],
             primaryLine: parseInt(line) || 2,
             productionMethod: normalizeMethod(method || "B"),
             active: true,
