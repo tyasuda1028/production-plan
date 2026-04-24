@@ -37,6 +37,19 @@ function formatYM(ym: number) {
   return `${s.slice(2, 4)}/${s.slice(4)}`;
 }
 
+// X軸カスタムtick：月 + 稼働日数
+function XAxisTick({ x, y, payload, chartData }: { x?: number | string; y?: number | string; payload?: { value: string }; chartData: { month: string; operatingDays: number }[] }) {
+  const d = chartData.find((c) => c.month === payload?.value);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={12} textAnchor="middle" fill="#6b7280" fontSize={10}>{payload?.value}</text>
+      {d && (
+        <text x={0} y={0} dy={24} textAnchor="middle" fill="#9ca3af" fontSize={9}>{d.operatingDays}日</text>
+      )}
+    </g>
+  );
+}
+
 export default function LineCard({ lineNumbers, title, subtitle, color, isGroupSummary }: Props) {
   const planBaseMonth  = useMasterStore((s) => s.planBaseMonth);
   const masterOpDays   = useMasterStore((s) => s.operatingDays);
@@ -152,7 +165,7 @@ export default function LineCard({ lineNumbers, title, subtitle, color, isGroupS
         <ResponsiveContainer width="100%" height={170}>
           <ComposedChart data={chartData} margin={{ top: 4, right: 28, left: -18, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+            <XAxis dataKey="month" tick={(props) => <XAxisTick {...props} chartData={chartData} />} height={40} />
             <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
             <YAxis
               yAxisId="right"
@@ -187,7 +200,7 @@ export default function LineCard({ lineNumbers, title, subtitle, color, isGroupS
         <ResponsiveContainer width="100%" height={120}>
           <LineChart data={chartData} margin={{ top: 4, right: 28, left: -18, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+            <XAxis dataKey="month" tick={(props) => <XAxisTick {...props} chartData={chartData} />} height={40} />
             <YAxis
               tick={{ fontSize: 10 }}
               domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, dailyCapacity) * 1.15)]}
