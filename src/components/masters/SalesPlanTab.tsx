@@ -160,23 +160,23 @@ function CsvImportSection({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Upload className="w-4 h-4 text-blue-500" />
-          <span className="text-sm font-medium text-gray-700">CSVで一括インポート</span>
-        </div>
-        <button
-          onClick={downloadTemplate}
-          className="flex items-center gap-1.5 text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50 whitespace-nowrap"
-        >
-          <Download className="w-3.5 h-3.5" />テンプレートDL（現在値入り）
-        </button>
+      <div className="flex items-center gap-2">
+        <Upload className="w-4 h-4 text-blue-500" />
+        <span className="text-sm font-medium text-gray-700">CSVで一括インポート</span>
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded p-2.5 text-xs text-blue-700">
         <strong>CSV形式：</strong> 品目コード, 製造器種名（参考）, {planMonths.map(String).join(", ")}
         <br />品目コードが空欄の場合は製造器種名で自動照合します。
       </div>
+
+      {/* テンプレートDL */}
+      <button
+        onClick={downloadTemplate}
+        className="flex items-center gap-1.5 text-xs bg-gray-700 text-white rounded px-3 py-2 hover:bg-gray-800 font-medium"
+      >
+        <Download className="w-3.5 h-3.5" />テンプレートDL（現在の入力値入り）
+      </button>
 
       {/* ドロップゾーン or プレビュー */}
       {!preview ? (
