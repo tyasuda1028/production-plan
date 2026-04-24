@@ -7,6 +7,7 @@ import { Plus, Pencil, Trash2, Upload, Download, Check, X } from "lucide-react";
 
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
 const METHOD_OPTIONS = ["A:主力製品", "B:在庫製品", "C:計画生産", "D:受注生産"];
+const GAS_OPTIONS = ["", "P", "12A"] as const;
 
 // 生産方式の正規化（"B" や文字化け → "B:在庫製品" など）
 const METHOD_PREFIX_MAP: Record<string, string> = {
@@ -24,6 +25,7 @@ function normalizeMethod(m: string): string {
 const emptyProduct = (): ProductMaster => ({
   code: "",
   modelCode: "",
+  gasType: "",
   primaryLine: 2,
   capacityPerPallet: 20,
   palletType: "P01",
@@ -33,9 +35,9 @@ const emptyProduct = (): ProductMaster => ({
 
 function CsvExportButton({ products }: { products: ProductMaster[] }) {
   const handle = () => {
-    const header = "品目コード,製造器種名,個/枚,パレット型,ライン,生産方式";
+    const header = "品目コード,製造器種名,ガス種,個/枚,パレット型,ライン,生産方式";
     const rows = products.map((p) =>
-      [p.code, p.modelCode, p.capacityPerPallet, p.palletType, p.primaryLine, p.productionMethod].join(",")
+      [p.code, p.modelCode, p.gasType ?? "", p.capacityPerPallet, p.palletType, p.primaryLine, p.productionMethod].join(",")
     );
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -130,11 +132,12 @@ export default function ProductMasterTab() {
         const rows: ProductMaster[] = [];
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(",").map((s) => s.trim());
-          const [code, modelCode, cap, pallet, line, method] = cols;
+          const [code, modelCode, gasType, cap, pallet, line, method] = cols;
           if (!modelCode) continue;
           rows.push({
             code: code ?? "",
             modelCode,
+            gasType: (["P", "12A"].includes(gasType ?? "") ? gasType : "") as string,
             capacityPerPallet: parseInt(cap) || 20,
             palletType: (["P01","P02","P03"].includes(pallet) ? pallet : "P01") as ProductMaster["palletType"],
             primaryLine: parseInt(line) || 2,
@@ -167,6 +170,14 @@ export default function ProductMasterTab() {
         </td>
         <td className="px-3 py-2">
           <EditableCell value={buf.modelCode} onChange={(v) => setBuf({ ...buf, modelCode: v })} placeholder="FHE-16AW1-G" />
+        </td>
+        <td className="px-3 py-2">
+          <select value={buf.gasType ?? ""} onChange={(e) => setBuf({ ...buf, gasType: e.target.value })}
+            className="text-xs border border-blue-300 rounded px-1.5 py-1 bg-white w-full">
+            {GAS_OPTIONS.map((g) => (
+              <option key={g} value={g}>{g || "—"}</option>
+            ))}
+          </select>
         </td>
         {/* 工場（ライン選択から自動導出・読み取り専用） */}
         <td className="px-3 py-2 text-center text-xs text-gray-400">
@@ -235,7 +246,7 @@ export default function ProductMasterTab() {
 
       {/* CSV仕様 */}
       <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-700">
-        <strong>CSV形式：</strong> 品目コード, 製造器種名, 個/枚, パレット型(P01/P02/P03), ライン, 生産方式
+        <strong>CSV形式：</strong> 品目コード, 製造器種名, ガス種(P/12A/空欄), 個/枚, パレット型(P01/P02/P03), ライン, 生産方式
       </div>
 
       {/* テーブル */}
@@ -246,6 +257,7 @@ export default function ProductMasterTab() {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">品目コード</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">製造器種名</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">ガス種</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">工場名</th>
                 <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">ライン</th>
                 <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-500 whitespace-nowrap">個/パレット</th>
@@ -267,6 +279,11 @@ export default function ProductMasterTab() {
                     <td className="px-3 py-2.5 text-xs font-mono font-semibold text-gray-800">{p.code || <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <div className="text-xs font-mono font-medium text-gray-800">{p.modelCode}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-center">
+                      {p.gasType
+                        ? <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">{p.gasType}</span>
+                        : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">{factoryName}</td>
                     <td className="px-3 py-2.5 text-xs text-gray-600 whitespace-nowrap">

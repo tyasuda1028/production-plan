@@ -2,6 +2,7 @@
 export interface ProductMaster {
   code: string;               // 製品コード（任意）
   modelCode: string;          // 製造器種名（例: FHE-16AW1-G）
+  gasType: string;            // ガス種（P / 12A）
   primaryLine: number;        // 主ライン
   capacityPerPallet: number;  // 個/パレット
   palletType: 'P01' | 'P02' | 'P03';
