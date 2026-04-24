@@ -282,6 +282,16 @@ export default function SalesPlanTab() {
   const productMasters       = useMasterStore((s) => s.productMasters);
 
   const planMonths = getPlanMonths(planBaseMonth);
+
+  // オーバーライドに含まれる全月 + 計画月 を統合して表示列にする
+  const displayMonths = useMemo(() => {
+    const all = new Set<number>([
+      ...planMonths,
+      ...salesPlanOverrides.map((o) => o.yearMonth),
+    ]);
+    return Array.from(all).sort((a, b) => a - b);
+  }, [planMonths, salesPlanOverrides]);
+
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() =>
@@ -312,11 +322,11 @@ export default function SalesPlanTab() {
   }
 
   function hasAnyOverride(productId: string) {
-    return planMonths.some((ym) => getOverride(productId, ym) !== undefined);
+    return displayMonths.some((ym) => getOverride(productId, ym) !== undefined);
   }
 
   function clearProduct(productId: string) {
-    planMonths.forEach((ym) => clearSalesPlanOverride(productId, ym));
+    displayMonths.forEach((ym) => clearSalesPlanOverride(productId, ym));
   }
 
   // CSVインポート確定（一括でstate更新し、Supabase書き込みを1回にまとめる）
@@ -356,9 +366,7 @@ export default function SalesPlanTab() {
     });
   }
 
-  const overrideCount = salesPlanOverrides.filter((o) =>
-    planMonths.includes(o.yearMonth)
-  ).length;
+  const overrideCount = salesPlanOverrides.length;
 
   return (
     <div className="space-y-4">
@@ -403,8 +411,8 @@ export default function SalesPlanTab() {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50 z-10">品目コード</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[120px] bg-gray-50 z-10">製造器種名</th>
-                {planMonths.map((ym) => (
-                  <th key={ym} className="px-3 py-3 text-right text-xs font-medium text-blue-600 whitespace-nowrap min-w-[90px]">
+                {displayMonths.map((ym) => (
+                  <th key={ym} className={`px-3 py-3 text-right text-xs font-medium whitespace-nowrap min-w-[90px] ${planMonths.includes(ym) ? "text-blue-600" : "text-gray-400"}`}>
                     {formatYearMonth(ym)}
                   </th>
                 ))}
@@ -423,7 +431,7 @@ export default function SalesPlanTab() {
                     <td className="px-3 py-2 text-xs text-gray-500 font-mono whitespace-nowrap sticky left-[120px] bg-inherit z-10">
                       {pm.modelCode}
                     </td>
-                    {planMonths.map((ym) => {
+                    {displayMonths.map((ym) => {
                       const overrideVal = getOverride(id, ym);
                       const displayVal  = overrideVal ?? 0;
                       const changed     = overrideVal !== undefined && overrideVal !== 0;
