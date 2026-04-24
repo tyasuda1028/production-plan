@@ -66,21 +66,52 @@ type ProductState = { inputs: MonthInput[]; initialInventory: number };
 export default function SimulationView() {
   const { planBaseMonth, setPlanBaseMonth, lineMasters, simMonthOverrides, setSimMonthInputs, salesPlanOverrides } = useMasterStore();
   const [search, setSearch] = useState("");
+  const [filterFactory, setFilterFactory] = useState("all");
   const [filterLine, setFilterLine] = useState("all");
   const [defaultTargetMonths, setDefaultTargetMonths] = useState(1.5);
 
   const planMonths = useMemo(() => getPlanMonths(planBaseMonth), [planBaseMonth]);
   const virtualProducts = useVirtualProducts();
 
-  const filtered = useMemo(() =>
-    virtualProducts.filter((p) => {
-      const q = search.toLowerCase();
-      const matchLine = filterLine === "all" || String(p.primaryLine) === filterLine;
-      const matchSearch = !q || p.manufacturingItemCode.toLowerCase().includes(q) || p.inventoryItemCode.toLowerCase().includes(q);
-      return matchLine && matchSearch;
-    }),
-    [search, filterLine, virtualProducts]
+  // 工場一覧（lineMastersから重複除去）
+  const factories = useMemo(() => {
+    const seen = new Set<string>();
+    return lineMasters.filter((l) => { if (seen.has(l.factoryName)) return false; seen.add(l.factoryName); return true; });
+  }, [lineMasters]);
+
+  // 工場絞り込み時のライン一覧
+  const filteredLineMasters = useMemo(() =>
+    filterFactory === "all" ? lineMasters : lineMasters.filter((l) => l.factoryName === filterFactory),
+    [lineMasters, filterFactory]
   );
+
+  // ライン→工場名マップ
+  const lineToFactory = useMemo(() => {
+    const m = new Map<number, string>();
+    lineMasters.forEach((l) => m.set(l.lineNumber, l.factoryName));
+    return m;
+  }, [lineMasters]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return virtualProducts
+      .filter((p) => {
+        const matchFactory = filterFactory === "all" || lineToFactory.get(p.primaryLine) === filterFactory;
+        const matchLine = filterLine === "all" || String(p.primaryLine) === filterLine;
+        const matchSearch = !q || p.manufacturingItemCode.toLowerCase().includes(q) || p.inventoryItemCode.toLowerCase().includes(q);
+        // 販売計画がゼロの製品は非表示
+        const totalSales = salesPlanOverrides
+          .filter((o) => o.productId === p.id && planMonths.includes(o.yearMonth))
+          .reduce((s, o) => s + o.salesPlan, 0);
+        return matchFactory && matchLine && matchSearch && totalSales > 0;
+      })
+      .sort((a, b) => {
+        // 販売計画合計の多い順
+        const sumA = salesPlanOverrides.filter((o) => o.productId === a.id && planMonths.includes(o.yearMonth)).reduce((s, o) => s + o.salesPlan, 0);
+        const sumB = salesPlanOverrides.filter((o) => o.productId === b.id && planMonths.includes(o.yearMonth)).reduce((s, o) => s + o.salesPlan, 0);
+        return sumB - sumA;
+      });
+  }, [search, filterFactory, filterLine, virtualProducts, salesPlanOverrides, planMonths, lineToFactory]);
 
   // 品目ごとの編集状態
   const [states, setStates] = useState<Map<string, ProductState>>(() => new Map());
@@ -213,10 +244,18 @@ export default function SimulationView() {
             className="w-full text-xs border-none outline-none bg-transparent" />
         </div>
 
+        <select value={filterFactory} onChange={(e) => { setFilterFactory(e.target.value); setFilterLine("all"); }}
+          className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white">
+          <option value="all">全工場</option>
+          {factories.map((f) => (
+            <option key={f.factoryName} value={f.factoryName}>{f.factoryName}</option>
+          ))}
+        </select>
+
         <select value={filterLine} onChange={(e) => setFilterLine(e.target.value)}
           className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white">
           <option value="all">全ライン</option>
-          {lineMasters.map((l) => (
+          {filteredLineMasters.map((l) => (
             <option key={l.lineNumber} value={String(l.lineNumber)}>{l.lineName}</option>
           ))}
         </select>
