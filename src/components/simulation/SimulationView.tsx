@@ -106,10 +106,11 @@ export default function SimulationView() {
         return matchFactory && matchLine && matchSearch && totalSales > 0;
       })
       .sort((a, b) => {
-        // 販売計画合計の多い順
-        const sumA = salesPlanOverrides.filter((o) => o.productId === a.id && planMonths.includes(o.yearMonth)).reduce((s, o) => s + o.salesPlan, 0);
-        const sumB = salesPlanOverrides.filter((o) => o.productId === b.id && planMonths.includes(o.yearMonth)).reduce((s, o) => s + o.salesPlan, 0);
-        return sumB - sumA;
+        // 計画開始月の販売計画の多い順
+        const firstMonth = planMonths[0];
+        const planA = salesPlanOverrides.find((o) => o.productId === a.id && o.yearMonth === firstMonth)?.salesPlan ?? 0;
+        const planB = salesPlanOverrides.find((o) => o.productId === b.id && o.yearMonth === firstMonth)?.salesPlan ?? 0;
+        return planB - planA;
       });
   }, [search, filterFactory, filterLine, virtualProducts, salesPlanOverrides, planMonths, lineToFactory]);
 
