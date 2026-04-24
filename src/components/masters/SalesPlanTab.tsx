@@ -303,17 +303,35 @@ export default function SalesPlanTab() {
     planMonths.forEach((ym) => clearSalesPlanOverride(productId, ym));
   }
 
-  // CSVインポート確定
+  // CSVインポート確定（一括でstate更新し、Supabase書き込みを1回にまとめる）
   function handleCsvImport(rows: PreviewRow[]) {
-    rows.forEach((row) => {
-      if (!row.productId) return;
-      row.plans.forEach(({ yearMonth, salesPlan }) => {
-        if (salesPlan === 0) {
-          clearSalesPlanOverride(row.productId, yearMonth);
-        } else {
-          setSalesPlanOverride(row.productId, yearMonth, salesPlan);
-        }
+    useMasterStore.setState((s) => {
+      // インポート対象の productId × yearMonth を収集
+      const importKeys = new Set<string>();
+      rows.forEach((row) => {
+        if (!row.productId) return;
+        row.plans.forEach(({ yearMonth }) => {
+          importKeys.add(`${row.productId}:${yearMonth}`);
+        });
       });
+
+      // 既存オーバーライドからインポート対象を除外
+      const kept = s.salesPlanOverrides.filter(
+        (o) => !importKeys.has(`${o.productId}:${o.yearMonth}`)
+      );
+
+      // 新しいオーバーライドを追加（salesPlan > 0 のみ保存）
+      const added: typeof s.salesPlanOverrides = [];
+      rows.forEach((row) => {
+        if (!row.productId) return;
+        row.plans.forEach(({ yearMonth, salesPlan }) => {
+          if (salesPlan > 0) {
+            added.push({ productId: row.productId, yearMonth, salesPlan });
+          }
+        });
+      });
+
+      return { salesPlanOverrides: [...kept, ...added] };
     });
   }
 
