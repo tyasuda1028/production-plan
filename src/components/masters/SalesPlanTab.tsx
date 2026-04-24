@@ -5,7 +5,8 @@ import { products } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { getPlanMonths, formatYearMonth } from "@/lib/data";
 import { ProductMaster } from "@/lib/masterTypes";
-import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { SalesPlanOverride } from "@/lib/masterTypes";
+import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle } from "lucide-react";
 
 // ── CSV インポート関連型 ──
 interface PreviewRow {
@@ -21,25 +22,26 @@ function CsvImportSection({
   planMonths,
   onImport,
   productMasters,
+  salesPlanOverrides,
 }: {
   planMonths: number[];
   onImport: (rows: PreviewRow[]) => void;
   productMasters: ProductMaster[];
+  salesPlanOverrides: SalesPlanOverride[];
 }) {
-  const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 製造器種名 → product の逆引きマップ（製造器種名ベースの後方互換用）
+  // 製造器種名 → product の逆引きマップ
   const productByModelCode = useMemo(
     () => new Map(products.map((p) => [p.manufacturingItemCode, p])),
     []
   );
 
-  // 品目コード → product のマップ（productMasters 経由）
+  // 品目コード → product のマップ（productMasters.code 経由）
   const productByItemCode = useMemo(() => {
     const map = new Map<string, typeof products[number]>();
     productMasters.forEach((pm) => {
@@ -51,14 +53,15 @@ function CsvImportSection({
   }, [productMasters, productByModelCode]);
 
   function parseCSV(text: string): PreviewRow[] {
-    const cleaned = text.replace(/^\uFEFF/, ""); // BOM除去
+    const cleaned = text.replace(/^\uFEFF/, "");
     const lines = cleaned.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error("データが不足しています");
 
-    // ヘッダー行: 品目コード, [製造器種名（参考）], YYYYMM, YYYYMM, ...
+    // ヘッダー: 品目コード, 製造器種名（参考）, YYYYMM, ...
+    // または: 製造器種名, YYYYMM, ... など柔軟に対応
     const headers = lines[0].split(",").map((s) => s.trim());
     const monthCols: { colIdx: number; ym: number }[] = [];
-    for (let i = 1; i < headers.length; i++) {
+    for (let i = 0; i < headers.length; i++) {
       const ym = parseInt(headers[i]);
       if (!isNaN(ym) && ym > 200000) monthCols.push({ colIdx: i, ym });
     }
@@ -67,17 +70,24 @@ function CsvImportSection({
     const rows: PreviewRow[] = [];
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(",").map((s) => s.trim());
-      const itemCode = cols[0];
-      if (!itemCode) continue;
-      // 品目コードで検索（製造器種名での後方互換検索も行う）
-      const product = productByItemCode.get(itemCode) ?? productByModelCode.get(itemCode);
+      const col0 = cols[0] ?? "";
+      const col1 = cols[1] ?? "";
+      if (!col0 && !col1) continue;
+
+      // 照合順: ① 品目コード → ② 製造器種名（col0）→ ③ 製造器種名（col1）
+      let product =
+        (col0 ? productByItemCode.get(col0) : undefined) ??
+        productByModelCode.get(col0) ??
+        (col1 ? productByModelCode.get(col1) : undefined);
+
       const plans = monthCols.map(({ colIdx, ym }) => ({
         yearMonth: ym,
         salesPlan: Math.max(0, parseInt(cols[colIdx] ?? "0") || 0),
       }));
+
       rows.push({
         productId: product?.id ?? "",
-        manufacturingItemCode: product?.manufacturingItemCode ?? itemCode,
+        manufacturingItemCode: product?.manufacturingItemCode ?? (col1 || col0),
         productName: product?.productName ?? "",
         plans,
         isKnown: !!product,
@@ -122,15 +132,19 @@ function CsvImportSection({
     setTimeout(() => setSuccess(""), 5000);
   }
 
-  // テンプレートDL: 品目コード, 製造器種名（参考）, YYYYMM...
+  // テンプレートDL: 現在の入力値（オーバーライド込み）を含む
   function downloadTemplate() {
     const header = ["品目コード", "製造器種名（参考）", ...planMonths.map(String)].join(",");
     const rows: string[] = [];
     productMasters.forEach((pm) => {
       const product = productByModelCode.get(pm.modelCode);
+      if (!product) return;
       const vals = planMonths.map((ym) => {
-        const mp = product?.monthlyPlans.find((m) => m.yearMonth === ym);
-        return mp?.salesPlan ?? 0;
+        const override = salesPlanOverrides.find(
+          (o) => o.productId === product.id && o.yearMonth === ym
+        );
+        if (override !== undefined) return override.salesPlan;
+        return product.monthlyPlans.find((m) => m.yearMonth === ym)?.salesPlan ?? 0;
       });
       rows.push([pm.code, pm.modelCode, ...vals].join(","));
     });
@@ -145,120 +159,107 @@ function CsvImportSection({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-      {/* アコーディオンヘッダー */}
-      <button
-        onClick={() => { setOpen((v) => !v); setPreview(null); setError(""); setSuccess(""); }}
-        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
-      >
+    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Upload className="w-4 h-4 text-blue-500" />
-          CSVで一括インポート
+          <span className="text-sm font-medium text-gray-700">CSVで一括インポート</span>
         </div>
-        {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-      </button>
+        <button
+          onClick={downloadTemplate}
+          className="flex items-center gap-1.5 text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50 whitespace-nowrap"
+        >
+          <Download className="w-3.5 h-3.5" />テンプレートDL（現在値入り）
+        </button>
+      </div>
 
-      {open && (
-        <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
-          {/* CSV仕様とテンプレート */}
-          <div className="flex items-start justify-between gap-4 mt-3">
-            <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700 flex-1">
-              <strong>CSV形式（ワイド形式）：</strong> 1行目ヘッダー（品目コード, 製造器種名（参考）, YYYYMM, ...）、2行目以降がデータ行
-              <br />例：<code className="bg-blue-100 px-1 rounded">10001,FHE-16AW1-G,500,520,540,560,580,600</code>
+      <div className="bg-blue-50 border border-blue-100 rounded p-2.5 text-xs text-blue-700">
+        <strong>CSV形式：</strong> 品目コード, 製造器種名（参考）, {planMonths.map(String).join(", ")}
+        <br />品目コードが空欄の場合は製造器種名で自動照合します。
+      </div>
+
+      {/* ドロップゾーン or プレビュー */}
+      {!preview ? (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+          className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
+            ${isDragging ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-blue-300 hover:bg-gray-50"}`}
+        >
+          <Upload className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">CSVファイルをドロップ または クリックして選択</p>
+          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-gray-400" />
+              <span className="text-sm font-medium text-gray-700">{preview.length}品目を確認</span>
+              <span className="text-xs text-gray-400">
+                （照合済: {preview.filter((r) => r.isKnown).length}件
+                {preview.filter((r) => !r.isKnown).length > 0 && (
+                  <span className="text-amber-600"> / 未照合: {preview.filter((r) => !r.isKnown).length}件（スキップ）</span>
+                )}）
+              </span>
             </div>
-            <button
-              onClick={downloadTemplate}
-              className="flex items-center gap-1.5 text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50 whitespace-nowrap shrink-0"
-            >
-              <Download className="w-3.5 h-3.5" />テンプレートDL
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setPreview(null)}
+                className="text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
+                キャンセル
+              </button>
+              <button onClick={confirmImport}
+                className="flex items-center gap-1.5 text-xs bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700">
+                <Check className="w-3.5 h-3.5" />インポート確定
+              </button>
+            </div>
           </div>
 
-          {/* ドロップゾーン */}
-          {!preview && (
-            <div
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => fileRef.current?.click()}
-              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-                ${isDragging ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-blue-300 hover:bg-gray-50"}`}
-            >
-              <Upload className="w-7 h-7 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">CSVファイルをドロップ または クリックして選択</p>
-              <p className="text-xs text-gray-400 mt-1">品目コード, 製造器種名（参考）, {planMonths.map(String).join(", ")}</p>
-              <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
-            </div>
-          )}
-
-          {error && (
-            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
-              <AlertTriangle className="w-4 h-4 shrink-0" />{error}
-            </div>
-          )}
-          {success && (
-            <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded p-3">
-              <Check className="w-4 h-4 shrink-0" />{success}
-            </div>
-          )}
-
-          {/* プレビュー */}
-          {preview && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm font-medium text-gray-700">{preview.length}品目を確認</span>
-                  <span className="text-xs text-gray-400">
-                    （既知: {preview.filter((r) => r.isKnown).length}件 / 未登録: {preview.filter((r) => !r.isKnown).length}件）
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setPreview(null)}
-                    className="text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
-                    キャンセル
-                  </button>
-                  <button onClick={confirmImport}
-                    className="flex items-center gap-1.5 text-xs bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700">
-                    <Check className="w-3.5 h-3.5" />インポート確定
-                  </button>
-                </div>
-              </div>
-
-              <div className="border border-gray-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto overflow-x-auto">
-                <table className="w-full text-xs border-collapse">
-                  <thead className="sticky top-0">
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">製造器種名</th>
-                      {preview[0]?.plans.map(({ yearMonth }) => (
-                        <th key={yearMonth} className="px-3 py-2 text-right font-medium text-blue-600 whitespace-nowrap">
-                          {formatYearMonth(yearMonth)}
-                        </th>
-                      ))}
-                      <th className="px-3 py-2 text-center font-medium text-gray-500">状態</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {preview.map((r) => (
-                      <tr key={r.manufacturingItemCode} className={`hover:bg-gray-50 ${!r.isKnown ? "bg-amber-50/50" : ""}`}>
-                        <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.manufacturingItemCode}</td>
-                        {r.plans.map(({ yearMonth, salesPlan }) => (
-                          <td key={yearMonth} className="px-3 py-2 text-right font-medium text-gray-800">
-                            {salesPlan.toLocaleString()}
-                          </td>
-                        ))}
-                        <td className="px-3 py-2 text-center">
-                          {r.isKnown
-                            ? <span className="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded">OK</span>
-                            : <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">スキップ</span>}
-                        </td>
-                      </tr>
+          <div className="border border-gray-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead className="sticky top-0">
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">製造器種名</th>
+                  {preview[0]?.plans.map(({ yearMonth }) => (
+                    <th key={yearMonth} className="px-3 py-2 text-right font-medium text-blue-600 whitespace-nowrap">
+                      {formatYearMonth(yearMonth)}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 text-center font-medium text-gray-500">照合</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {preview.map((r, i) => (
+                  <tr key={i} className={`hover:bg-gray-50 ${!r.isKnown ? "bg-amber-50/50" : ""}`}>
+                    <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.manufacturingItemCode}</td>
+                    {r.plans.map(({ yearMonth, salesPlan }) => (
+                      <td key={yearMonth} className="px-3 py-2 text-right font-medium text-gray-800">
+                        {salesPlan.toLocaleString()}
+                      </td>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                    <td className="px-3 py-2 text-center">
+                      {r.isKnown
+                        ? <span className="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded">OK</span>
+                        : <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">スキップ</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
+          <AlertTriangle className="w-4 h-4 shrink-0" />{error}
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded p-3">
+          <Check className="w-4 h-4 shrink-0" />{success}
         </div>
       )}
     </div>
@@ -273,14 +274,12 @@ export default function SalesPlanTab() {
   const clearSalesPlanOverride = useMasterStore((s) => s.clearSalesPlanOverride);
   const productMasters = useMasterStore((s) => s.productMasters);
 
-  // 製造器種名 → 品目コードのマップ
   const codeByModelCode = useMemo(
     () => new Map(productMasters.map((pm) => [pm.modelCode, pm.code])),
     [productMasters]
   );
 
   const planMonths = getPlanMonths(planBaseMonth);
-
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() =>
@@ -316,10 +315,11 @@ export default function SalesPlanTab() {
     planMonths.forEach((ym) => clearSalesPlanOverride(productId, ym));
   }
 
-  // CSVインポート確定時の処理
+  // CSVインポート確定
   function handleCsvImport(rows: PreviewRow[]) {
     rows.forEach((row) => {
       row.plans.forEach(({ yearMonth, salesPlan }) => {
+        if (!row.productId) return;
         const product = products.find((p) => p.id === row.productId);
         if (!product) return;
         const basePlan = product.monthlyPlans.find((m) => m.yearMonth === yearMonth);
@@ -332,37 +332,6 @@ export default function SalesPlanTab() {
     });
   }
 
-  // 製造器種名 → product の逆引きマップ
-  const productByModelCode = useMemo(
-    () => new Map(products.map((p) => [p.manufacturingItemCode, p])),
-    []
-  );
-
-  // 現在の販売計画（入力値 or デフォルト値）を CSV でエクスポート
-  function handleCsvExport() {
-    const header = ["品目コード", "製造器種名（参考）", ...planMonths.map(String)].join(",");
-    const rows: string[] = [];
-    productMasters.forEach((pm) => {
-      const product = productByModelCode.get(pm.modelCode);
-      const vals = planMonths.map((ym) => {
-        const override = salesPlanOverrides.find(
-          (o) => o.productId === product?.id && o.yearMonth === ym
-        );
-        if (override !== undefined) return override.salesPlan;
-        return product?.monthlyPlans.find((m) => m.yearMonth === ym)?.salesPlan ?? 0;
-      });
-      rows.push([pm.code, pm.modelCode, ...vals].join(","));
-    });
-    const csv = [header, ...rows].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `販売計画_${planMonths[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   const overrideCount = salesPlanOverrides.filter((o) =>
     planMonths.includes(o.yearMonth)
   ).length;
@@ -372,23 +341,16 @@ export default function SalesPlanTab() {
       {/* 説明 */}
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
         品目ごとに<strong>先6ヶ月分の販売計画</strong>を入力します。
-        入力した値は生産計画表の販売計画・生産必要数・過不足に即時反映されます。
-        元の計画値に戻すには各行の <strong>↩</strong> ボタン、またはCSVインポートで上書きできます。
+        CSVで一括取り込みするには「テンプレートDL」でファイルを取得し、値を編集してインポートしてください。
       </div>
 
-      {/* ツールバー：一括DL */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleCsvExport}
-          className="flex items-center gap-1.5 text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50"
-        >
-          <Download className="w-3.5 h-3.5" />現在の販売計画をDL
-        </button>
-        <span className="text-xs text-gray-400">（入力値を反映した現在の計画値）</span>
-      </div>
-
-      {/* CSVインポートアコーディオン */}
-      <CsvImportSection planMonths={planMonths} onImport={handleCsvImport} productMasters={productMasters} />
+      {/* CSVインポート */}
+      <CsvImportSection
+        planMonths={planMonths}
+        onImport={handleCsvImport}
+        productMasters={productMasters}
+        salesPlanOverrides={salesPlanOverrides}
+      />
 
       {/* 検索バー */}
       <div className="flex items-center gap-3">
@@ -484,4 +446,3 @@ export default function SalesPlanTab() {
     </div>
   );
 }
-
