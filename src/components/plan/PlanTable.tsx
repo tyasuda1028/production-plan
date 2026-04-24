@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { products, getPlanMonths, formatYearMonth } from "@/lib/data";
+import { getPlanMonths, formatYearMonth } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { MonthlyPlan, Product } from "@/lib/types";
-import { useLeveledPlans, LeveledPlan } from "@/lib/useLeveledPlans";
+import { useLeveledPlans, LeveledPlan, useVirtualProducts } from "@/lib/useLeveledPlans";
 import { ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 
 type ExpandedRows = Record<string, boolean>;
@@ -33,7 +33,8 @@ export default function PlanTable() {
   const planMonths    = getPlanMonths(planBaseMonth);
 
   // 共有フックから均等日量計画を取得
-  const leveledPlansMap = useLeveledPlans();
+  const leveledPlansMap  = useLeveledPlans();
+  const virtualProducts  = useVirtualProducts();
 
   const [search, setSearch] = useState("");
   const [filterClassification, setFilterClassification] = useState("all");
@@ -58,13 +59,12 @@ export default function PlanTable() {
   const methods = ["all", "B:在庫製品", "D:受注生産"];
 
   const filtered = useMemo(() => {
-    return products.filter((p) => {
+    return virtualProducts.filter((p) => {
       const q = search.toLowerCase();
       const matchSearch =
         !q ||
-        p.productName.toLowerCase().includes(q) ||
         p.manufacturingItemCode.toLowerCase().includes(q) ||
-        p.planCategory1.toLowerCase().includes(q);
+        p.inventoryItemCode.toLowerCase().includes(q);
 
       const lm = lineMap.get(p.primaryLine);
       const matchClass   = filterClassification === "all" || lm?.classification === filterClassification;
@@ -74,7 +74,7 @@ export default function PlanTable() {
 
       return matchSearch && matchClass && matchFactory && matchLine && matchMethod;
     });
-  }, [search, filterClassification, filterFactory, filterLineName, filterMethod, lineMap]);
+  }, [search, filterClassification, filterFactory, filterLineName, filterMethod, lineMap, virtualProducts]);
 
   function toggleRow(id: string) {
     setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }));

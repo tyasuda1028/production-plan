@@ -1,11 +1,85 @@
 import { useMemo } from "react";
 import { useMasterStore } from "./masterStore";
-import { products, getPlanMonths } from "./data";
+import { getPlanMonths, addMonths } from "./data";
 import { Product, MonthlyPlan } from "./types";
+import { ProductMaster, pmKey } from "./masterTypes";
 
 export type LeveledPlan = MonthlyPlan & { dailyQuantity: number };
 
 const DEFAULT_OP_DAYS = 20;
+
+/**
+ * ProductMaster + 初期在庫数量から、計算用の仮想 Product を構築する。
+ * monthlyPlans はすべて salesPlan: 0 で初期化し、salesPlanOverrides で上書きする。
+ */
+export function buildVirtualProduct(
+  pm: ProductMaster,
+  lastMonthInventory: number,
+  planMonths: number[]
+): Product {
+  return {
+    id: pmKey(pm),
+    responsible: "",
+    positive: "",
+    planCategory1: pm.productionMethod,
+    planCategory2: "",
+    planCategory3: "",
+    planCategory4: "",
+    factoryCode: "",
+    inventoryItemCode: pm.code,
+    manufacturingItemCode: pm.modelCode,
+    productName: pm.modelCode || pm.code,
+    gasType: pm.gasType ?? "",
+    primaryFactory: "",
+    primaryLine: pm.primaryLine,
+    productionMethod: pm.productionMethod,
+    orderQuantity: 0,
+    factoryInventory: 0,
+    branchInventory: 0,
+    consignmentInventory: 0,
+    totalInventory: lastMonthInventory,
+    twoMonthsAgoInventory: 0,
+    lastMonthInventory,
+    monthlySales: [],
+    monthlyPlans: planMonths.map((ym) => ({
+      yearMonth: ym,
+      salesPlan: 0,
+      targetInventoryMonths: 1.5,
+      productionSchedule: 0,
+      requiredProduction: 0,
+      surplusDeficit: 0,
+      planAdjustment: 0,
+      monthEndInventory: lastMonthInventory,
+      monthEndInventoryMonths: 0,
+    })),
+    dailyAllocations: [],
+    comment: "",
+  };
+}
+
+/**
+ * productMasters + inventorySnapshots から仮想 Product[] を返すフック。
+ * ScheduleView / PlanTable / SimulationView など products を使う箇所で利用する。
+ */
+export function useVirtualProducts(): Product[] {
+  const productMasters     = useMasterStore((s) => s.productMasters);
+  const inventorySnapshots = useMasterStore((s) => s.inventorySnapshots);
+  const planBaseMonth      = useMasterStore((s) => s.planBaseMonth);
+
+  return useMemo(() => {
+    const prevMonth  = addMonths(planBaseMonth, -1);
+    const planMonths = getPlanMonths(planBaseMonth);
+    return productMasters
+      .filter((pm) => pm.active !== false)
+      .map((pm) => {
+        const key  = pmKey(pm);
+        const snap = inventorySnapshots.find(
+          (s) => s.yearMonth === prevMonth && s.productCode === key
+        );
+        return buildVirtualProduct(pm, snap?.quantity ?? 0, planMonths);
+      });
+  }, [productMasters, inventorySnapshots, planBaseMonth]);
+}
 
 /**
  * 1品目分の均等日量計画を算出する純粋関数。
@@ -47,18 +121,15 @@ export function buildLeveledPlanForProduct(
     basePlans = basePlans.map((mp, i) => {
       const si = simForProduct.get(mp.yearMonth);
       if (!si) {
-        // No sim input for this month – use existing mp as-is for chain continuity
         prevInvChain = prevInvChain + mp.requiredProduction - mp.salesPlan;
         return mp;
       }
-      // Next month's sales plan (for targetInventoryQty calculation)
       const nextSalesPlan =
         i + 1 < basePlans.length
           ? (simForProduct.get(basePlans[i + 1].yearMonth)?.salesPlan ?? basePlans[i + 1].salesPlan)
           : p.monthlyPlans.find((m) => m.yearMonth > mp.yearMonth)?.salesPlan ?? 0;
       const targetInventoryQty = Math.round(si.targetInventoryMonths * nextSalesPlan);
       const requiredProduction = Math.max(0, targetInventoryQty + si.salesPlan - prevInvChain);
-      // Estimate next prevInv using requiredProduction (before leveling)
       prevInvChain = prevInvChain + requiredProduction - si.salesPlan;
       return { ...mp, salesPlan: si.salesPlan, requiredProduction };
     });
@@ -66,7 +137,6 @@ export function buildLeveledPlanForProduct(
 
   const opDays = planMonths.map((ym) => opDaysCount.get(ym) ?? DEFAULT_OP_DAYS);
 
-  // 前半3ヶ月・後半3ヶ月それぞれで均等日量レートを計算
   const req1  = basePlans.slice(0, 3).reduce((s, m) => s + m.requiredProduction, 0);
   const days1 = opDays.slice(0, 3).reduce((s, d) => s + d, 0);
   const rate1 = days1 > 0 ? req1 / days1 : 0;
@@ -115,8 +185,11 @@ export function useLeveledPlans(): Map<string, Map<number, LeveledPlan>> {
   const salesPlanOverrides  = useMasterStore((s) => s.salesPlanOverrides);
   const masterOperatingDays = useMasterStore((s) => s.operatingDays);
   const simMonthOverrides   = useMasterStore((s) => s.simMonthOverrides);
+  const productMasters      = useMasterStore((s) => s.productMasters);
+  const inventorySnapshots  = useMasterStore((s) => s.inventorySnapshots);
 
   const planMonths = useMemo(() => getPlanMonths(planBaseMonth), [planBaseMonth]);
+  const prevMonth  = useMemo(() => addMonths(planBaseMonth, -1), [planBaseMonth]);
 
   const overrideMap = useMemo(
     () => new Map(salesPlanOverrides.map((o) => [`${o.productId}:${o.yearMonth}`, o.salesPlan])),
@@ -143,9 +216,14 @@ export function useLeveledPlans(): Map<string, Map<number, LeveledPlan>> {
 
   return useMemo(() => {
     const result = new Map<string, Map<number, LeveledPlan>>();
-    products.forEach((p) => {
-      result.set(p.id, buildLeveledPlanForProduct(p, planMonths, opDaysCount, overrideMap, simInputsMap));
+    productMasters.filter((pm) => pm.active !== false).forEach((pm) => {
+      const key  = pmKey(pm);
+      const snap = inventorySnapshots.find(
+        (s) => s.yearMonth === prevMonth && s.productCode === key
+      );
+      const vp = buildVirtualProduct(pm, snap?.quantity ?? 0, planMonths);
+      result.set(key, buildLeveledPlanForProduct(vp, planMonths, opDaysCount, overrideMap, simInputsMap));
     });
     return result;
-  }, [planMonths, opDaysCount, overrideMap, simInputsMap]);
+  }, [planMonths, prevMonth, productMasters, inventorySnapshots, opDaysCount, overrideMap, simInputsMap]);
 }

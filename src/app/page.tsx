@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { products, formatYearMonth, getPlanMonths, addMonths } from "@/lib/data";
+import { formatYearMonth, getPlanMonths, addMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import { LineMaster } from "@/lib/masterTypes";
@@ -104,14 +104,13 @@ export default function DashboardPage() {
   const factoryMasters  = useMasterStore((s) => s.factoryMasters);
   const lineMasters     = useMasterStore((s) => s.lineMasters);
   const planMonths      = getPlanMonths(planBaseMonth);
-  const prevMonth       = addMonths(planBaseMonth, -1);
   const leveledPlansMap = useLeveledPlans();
 
   // ── 全体KPI ──────────────────────────────────────────────────────
   const currentKPI = useMemo(() => {
     let salesPlan = 0, productionSchedule = 0, monthEndInventory = 0;
-    products.forEach((p) => {
-      const lp = leveledPlansMap.get(p.id)?.get(planBaseMonth);
+    leveledPlansMap.forEach((monthMap) => {
+      const lp = monthMap.get(planBaseMonth);
       if (!lp) return;
       salesPlan          += lp.salesPlan;
       productionSchedule += lp.productionSchedule;
@@ -120,19 +119,6 @@ export default function DashboardPage() {
     const inventoryMonths = salesPlan > 0 ? parseFloat((monthEndInventory / salesPlan).toFixed(2)) : 0;
     return { salesPlan, productionSchedule, monthEndInventory, inventoryMonths };
   }, [leveledPlansMap, planBaseMonth]);
-
-  const prevKPI = useMemo(() => {
-    let salesPlan = 0, productionSchedule = 0, monthEndInventory = 0;
-    products.forEach((p) => {
-      const mp = p.monthlyPlans.find((m) => m.yearMonth === prevMonth);
-      if (!mp) return;
-      salesPlan          += mp.salesPlan;
-      productionSchedule += mp.productionSchedule;
-      monthEndInventory  += mp.monthEndInventory;
-    });
-    const inventoryMonths = salesPlan > 0 ? parseFloat((monthEndInventory / salesPlan).toFixed(2)) : 0;
-    return { salesPlan, productionSchedule, monthEndInventory, inventoryMonths };
-  }, [prevMonth]);
 
   // ── 工場 → 分類 → ライン のグループ構造 ─────────────────────────
   const factoryGroups = useMemo(() => {
@@ -180,10 +166,10 @@ export default function DashboardPage() {
       {/* 全体サマリー */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
-          { label: `販売計画（${formatYearMonth(planBaseMonth)}）`,  value: currentKPI.salesPlan,          sub: `前月 ${prevKPI.salesPlan.toLocaleString()} 台` },
-          { label: `生産計画（${formatYearMonth(planBaseMonth)}）`,  value: currentKPI.productionSchedule, sub: `前月 ${prevKPI.productionSchedule.toLocaleString()} 台` },
-          { label: `月末在庫（${formatYearMonth(planBaseMonth)}）`,  value: currentKPI.monthEndInventory,  sub: `前月 ${prevKPI.monthEndInventory.toLocaleString()} 台` },
-          { label: `在庫月数（${formatYearMonth(planBaseMonth)}）`,  value: `${currentKPI.inventoryMonths.toFixed(1)} ヶ月`, sub: `前月 ${prevKPI.inventoryMonths.toFixed(1)} ヶ月` },
+          { label: `販売計画（${formatYearMonth(planBaseMonth)}）`,  value: currentKPI.salesPlan,          sub: "" },
+          { label: `生産計画（${formatYearMonth(planBaseMonth)}）`,  value: currentKPI.productionSchedule, sub: "" },
+          { label: `月末在庫（${formatYearMonth(planBaseMonth)}）`,  value: currentKPI.monthEndInventory,  sub: "" },
+          { label: `在庫月数（${formatYearMonth(planBaseMonth)}）`,  value: `${currentKPI.inventoryMonths.toFixed(1)} ヶ月`, sub: "" },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="text-xs text-gray-500 mb-1">{kpi.label}</div>

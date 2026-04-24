@@ -1,30 +1,32 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { products, formatYearMonth, addMonths } from "@/lib/data";
+import { formatYearMonth, addMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
+import { useVirtualProducts } from "@/lib/useLeveledPlans";
 import ProductSimCard from "./ProductSimCard";
 import { Info, Search, SlidersHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function SimulationView() {
-  const { planBaseMonth, setPlanBaseMonth } = useMasterStore();
+  const { planBaseMonth, setPlanBaseMonth, lineMasters } = useMasterStore();
   const [search, setSearch] = useState("");
   const [filterLine, setFilterLine] = useState("all");
   const [defaultTargetMonths, setDefaultTargetMonths] = useState(1.5);
   const [showAll, setShowAll] = useState(false);
 
+  const virtualProducts = useVirtualProducts();
+
   const filtered = useMemo(() => {
-    return products.filter((p) => {
+    return virtualProducts.filter((p) => {
       const q = search.toLowerCase();
       const matchLine = filterLine === "all" || String(p.primaryLine) === filterLine;
       const matchSearch =
         !q ||
-        p.productName.toLowerCase().includes(q) ||
         p.manufacturingItemCode.toLowerCase().includes(q) ||
-        p.responsible.toLowerCase().includes(q);
+        p.inventoryItemCode.toLowerCase().includes(q);
       return matchLine && matchSearch;
     });
-  }, [search, filterLine]);
+  }, [search, filterLine, virtualProducts]);
 
   const displayedProducts = showAll ? filtered : filtered.slice(0, 4);
 
@@ -90,8 +92,8 @@ export default function SimulationView() {
           className="text-sm border border-gray-200 rounded px-2 py-1.5 bg-white"
         >
           <option value="all">全ライン</option>
-          {[2, 3, 4, 7].map((l) => (
-            <option key={l} value={String(l)}>ライン {l}</option>
+          {lineMasters.map((l) => (
+            <option key={l.lineNumber} value={String(l.lineNumber)}>{l.lineName}</option>
           ))}
         </select>
 

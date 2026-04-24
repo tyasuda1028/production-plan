@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { products, formatYearMonth, getPlanMonths } from "@/lib/data";
+import { formatYearMonth, getPlanMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
-import { Product } from "@/lib/types";
+import { ProductMaster, pmKey } from "@/lib/masterTypes";
 import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import { Download, Database } from "lucide-react";
 
@@ -57,17 +57,9 @@ export default function ScheduleView() {
 
   const isOperating = (day: number) => operatingDayNums.includes(day);
 
-  function getMonthPlanIdx(p: Product): number {
-    return p.monthlyPlans.findIndex((mp) => mp.yearMonth === selectedYM);
-  }
-
-  function getDailyQty(p: Product): number {
-    const leveled = leveledPlansMap.get(p.id)?.get(selectedYM);
-    if (leveled) return leveled.dailyQuantity;
-    const idx = getMonthPlanIdx(p);
-    const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
-    if (!mp || operatingDayNums.length === 0) return 0;
-    return Math.round(mp.productionSchedule / operatingDayNums.length);
+  function getDailyQty(pm: ProductMaster): number {
+    const leveled = leveledPlansMap.get(pmKey(pm))?.get(selectedYM);
+    return leveled?.dailyQuantity ?? 0;
   }
 
   const monthOptions = useMemo(() => {
@@ -80,13 +72,14 @@ export default function ScheduleView() {
 
   const filteredProducts = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
-        p.manufacturingItemCode.toLowerCase().includes(q) ||
-        p.productName.toLowerCase().includes(q)
+    const active = productMasters.filter((pm) => pm.active !== false);
+    if (!q) return active;
+    return active.filter(
+      (pm) =>
+        pm.modelCode.toLowerCase().includes(q) ||
+        pm.code.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, productMasters]);
 
   // ── 工場 → 分類 → ライン の階層グループ ────────────────────────
   const factoryGroups = useMemo(() => {
@@ -115,7 +108,7 @@ export default function ScheduleView() {
         const color = CLASSIFICATION_COLORS[colorIdx % CLASSIFICATION_COLORS.length];
         const lineGroups = lines.map((lm) => ({
           lineMaster: lm,
-          lineProducts: filteredProducts.filter((p) => p.primaryLine === lm.lineNumber),
+          lineProducts: filteredProducts.filter((pm) => pm.primaryLine === lm.lineNumber),
         })).filter((g) => g.lineProducts.length > 0);
 
         return { classification: cls, lines, lineGroups, color };
@@ -131,7 +124,7 @@ export default function ScheduleView() {
       .sort((a, b) => a.lineNumber - b.lineNumber);
     const orphanGroups = orphanLines.map((lm) => ({
       lineMaster: lm,
-      lineProducts: filteredProducts.filter((p) => p.primaryLine === lm.lineNumber),
+      lineProducts: filteredProducts.filter((pm) => pm.primaryLine === lm.lineNumber),
     })).filter((g) => g.lineProducts.length > 0);
 
     return { groups, orphanGroups };
@@ -151,7 +144,7 @@ export default function ScheduleView() {
   // ── ライン別スケジュールテーブル ──────────────────────────────
   function renderLineTable(
     lineMaster: typeof lineMasters[number],
-    lineProducts: Product[],
+    lineProducts: ProductMaster[],
     color: typeof CLASSIFICATION_COLORS[number]
   ) {
     const lineDailyTotals: Record<number, number> = {};
@@ -208,18 +201,16 @@ export default function ScheduleView() {
             </thead>
             <tbody>
               {lineProducts.map((p) => {
-                const leveled = leveledPlansMap.get(p.id)?.get(selectedYM);
-                const idx = getMonthPlanIdx(p);
-                const mp = idx >= 0 ? p.monthlyPlans[idx] : undefined;
-                const productionSchedule = leveled?.productionSchedule ?? mp?.productionSchedule;
+                const leveled = leveledPlansMap.get(pmKey(p))?.get(selectedYM);
+                const productionSchedule = leveled?.productionSchedule;
                 const dq = getDailyQty(p);
                 const rowTotal = dq * operatingDayNums.length;
 
                 return (
-                  <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={pmKey(p)} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap border-r border-gray-200">
                       <div className="font-medium text-gray-800 font-mono leading-tight">
-                        {p.manufacturingItemCode}
+                        {p.modelCode}
                       </div>
                     </td>
                     <td className="px-2 py-2 text-right font-medium text-blue-700 border-r border-gray-200">
@@ -304,18 +295,15 @@ export default function ScheduleView() {
       allRows.push(["工場", "分類", "ライン", "製造器種名", "月計画（台）", ...dayHeaders, "合計"]);
 
       orderedLines.forEach((lm) => {
-        const lps = products.filter((p) => p.primaryLine === lm.lineNumber);
+        const lps = productMasters.filter((pm) => pm.active !== false && pm.primaryLine === lm.lineNumber);
         if (lps.length === 0) return;
 
         const lineDayTotals: number[] = mDays.map(() => 0);
 
-        lps.forEach((p) => {
-          const leveled = leveledPlansMap.get(p.id)?.get(ym);
-          const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
-          const prodSchedule = leveled?.productionSchedule ?? mp?.productionSchedule ?? 0;
-          const dq = leveled
-            ? leveled.dailyQuantity
-            : (mp && opNums.length > 0 ? Math.round(mp.productionSchedule / opNums.length) : 0);
+        lps.forEach((pm) => {
+          const leveled = leveledPlansMap.get(pmKey(pm))?.get(ym);
+          const prodSchedule = leveled?.productionSchedule ?? 0;
+          const dq = leveled?.dailyQuantity ?? 0;
           const dayValues = mDays.map(({ day }, di) => {
             const v = isOp(day) ? dq : 0;
             lineDayTotals[di] += v;
@@ -325,7 +313,7 @@ export default function ScheduleView() {
             lm.factoryName,
             lm.classification,
             lm.lineName,
-            p.manufacturingItemCode,
+            pm.modelCode,
             String(prodSchedule),
             ...dayValues.map(String),
             String(dayValues.reduce((s, v) => s + v, 0)),
@@ -364,14 +352,10 @@ export default function ScheduleView() {
         ? masterEntry.operatingDates
         : mDays.filter((d) => d.dow !== 0 && d.dow !== 6).map((d) => d.day);
       const dqMap = new Map<string, number>();
-      products.forEach((p) => {
-        const leveled = leveledPlansMap.get(p.id)?.get(ym);
-        if (leveled) {
-          dqMap.set(p.id, leveled.dailyQuantity);
-        } else {
-          const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
-          dqMap.set(p.id, mp && opNums.length > 0 ? Math.round(mp.productionSchedule / opNums.length) : 0);
-        }
+      productMasters.filter((pm) => pm.active !== false).forEach((pm) => {
+        const key = pmKey(pm);
+        const leveled = leveledPlansMap.get(key)?.get(ym);
+        dqMap.set(key, leveled?.dailyQuantity ?? 0);
       });
       return { ym, opNums, dqMap };
     });
@@ -386,19 +370,17 @@ export default function ScheduleView() {
       });
     });
 
-    const codeMap = new Map(productMasters.map((pm) => [pm.modelCode, pm.code]));
-
     const rows: string[][] = [
       ["製品コード", "製造器種名", "ライン", ...dayCols.map((c) => c.label)],
     ];
 
-    products.forEach((p) => {
-      const productCode = codeMap.get(p.manufacturingItemCode) || p.manufacturingItemCode;
+    productMasters.filter((pm) => pm.active !== false).forEach((pm) => {
+      const key = pmKey(pm);
       const dayValues = dayCols.map(({ ym, day }) => {
         const meta = monthMetas.find((m) => m.ym === ym)!;
-        return meta.opNums.includes(day) ? String(meta.dqMap.get(p.id) ?? 0) : "0";
+        return meta.opNums.includes(day) ? String(meta.dqMap.get(key) ?? 0) : "0";
       });
-      rows.push([productCode, p.manufacturingItemCode, String(p.primaryLine), ...dayValues]);
+      rows.push([pm.code, pm.modelCode, String(pm.primaryLine), ...dayValues]);
     });
 
     const base = String(planBaseMonth);

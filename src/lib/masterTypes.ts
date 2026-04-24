@@ -63,3 +63,9 @@ export interface SimMonthOverride {
   targetInventoryMonths: number;
 }
 
+// ========== ユーティリティ ==========
+/** ProductMaster の一意キー（品目コード優先、なければ製造器種名） */
+export function pmKey(pm: ProductMaster): string {
+  return pm.code || pm.modelCode;
+}
+

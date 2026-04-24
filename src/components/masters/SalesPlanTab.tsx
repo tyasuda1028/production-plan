@@ -1,18 +1,15 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef } from "react";
-import { products } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { getPlanMonths, formatYearMonth } from "@/lib/data";
-import { ProductMaster } from "@/lib/masterTypes";
-import { SalesPlanOverride } from "@/lib/masterTypes";
+import { ProductMaster, SalesPlanOverride, pmKey } from "@/lib/masterTypes";
 import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle } from "lucide-react";
 
 // ── CSV インポート関連型 ──
 interface PreviewRow {
-  productId: string;
-  manufacturingItemCode: string;
-  productName: string;
+  productId: string;         // pmKey(pm)
+  modelCode: string;         // 製造器種名（表示用）
   plans: { yearMonth: number; salesPlan: number }[];
   isKnown: boolean;
 }
@@ -35,22 +32,20 @@ function CsvImportSection({
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 製造器種名 → product の逆引きマップ
-  const productByModelCode = useMemo(
-    () => new Map(products.map((p) => [p.manufacturingItemCode, p])),
-    []
+  // 製造器種名 → ProductMaster 逆引きマップ
+  const pmByModelCode = useMemo(
+    () => new Map(productMasters.map((pm) => [pm.modelCode, pm])),
+    [productMasters]
   );
 
-  // 品目コード → product のマップ（productMasters.code 経由）
-  const productByItemCode = useMemo(() => {
-    const map = new Map<string, typeof products[number]>();
+  // 品目コード → ProductMaster 逆引きマップ
+  const pmByCode = useMemo(() => {
+    const map = new Map<string, ProductMaster>();
     productMasters.forEach((pm) => {
-      if (!pm.code) return;
-      const product = productByModelCode.get(pm.modelCode);
-      if (product) map.set(pm.code, product);
+      if (pm.code) map.set(pm.code, pm);
     });
     return map;
-  }, [productMasters, productByModelCode]);
+  }, [productMasters]);
 
   function parseCSV(text: string): PreviewRow[] {
     const cleaned = text.replace(/^\uFEFF/, "");
@@ -58,7 +53,6 @@ function CsvImportSection({
     if (lines.length < 2) throw new Error("データが不足しています");
 
     // ヘッダー: 品目コード, 製造器種名（参考）, YYYYMM, ...
-    // または: 製造器種名, YYYYMM, ... など柔軟に対応
     const headers = lines[0].split(",").map((s) => s.trim());
     const monthCols: { colIdx: number; ym: number }[] = [];
     for (let i = 0; i < headers.length; i++) {
@@ -74,11 +68,11 @@ function CsvImportSection({
       const col1 = cols[1] ?? "";
       if (!col0 && !col1) continue;
 
-      // 照合順: ① 品目コード → ② 製造器種名（col0）→ ③ 製造器種名（col1）
-      let product =
-        (col0 ? productByItemCode.get(col0) : undefined) ??
-        productByModelCode.get(col0) ??
-        (col1 ? productByModelCode.get(col1) : undefined);
+      // 照合順: ① 品目コード(col0) → ② 製造器種名(col0) → ③ 製造器種名(col1)
+      const pm =
+        (col0 ? pmByCode.get(col0) : undefined) ??
+        pmByModelCode.get(col0) ??
+        (col1 ? pmByModelCode.get(col1) : undefined);
 
       const plans = monthCols.map(({ colIdx, ym }) => ({
         yearMonth: ym,
@@ -86,11 +80,10 @@ function CsvImportSection({
       }));
 
       rows.push({
-        productId: product?.id ?? "",
-        manufacturingItemCode: product?.manufacturingItemCode ?? (col1 || col0),
-        productName: product?.productName ?? "",
+        productId: pm ? pmKey(pm) : "",
+        modelCode: pm?.modelCode ?? (col1 || col0),
         plans,
-        isKnown: !!product,
+        isKnown: !!pm,
       });
     }
     return rows;
@@ -137,14 +130,12 @@ function CsvImportSection({
     const header = ["品目コード", "製造器種名（参考）", ...planMonths.map(String)].join(",");
     const rows: string[] = [];
     productMasters.forEach((pm) => {
-      const product = productByModelCode.get(pm.modelCode);
-      if (!product) return;
+      const id = pmKey(pm);
       const vals = planMonths.map((ym) => {
         const override = salesPlanOverrides.find(
-          (o) => o.productId === product.id && o.yearMonth === ym
+          (o) => o.productId === id && o.yearMonth === ym
         );
-        if (override !== undefined) return override.salesPlan;
-        return product.monthlyPlans.find((m) => m.yearMonth === ym)?.salesPlan ?? 0;
+        return override !== undefined ? override.salesPlan : 0;
       });
       rows.push([pm.code, pm.modelCode, ...vals].join(","));
     });
@@ -167,7 +158,7 @@ function CsvImportSection({
 
       <div className="bg-blue-50 border border-blue-100 rounded p-2.5 text-xs text-blue-700">
         <strong>CSV形式：</strong> 品目コード, 製造器種名（参考）, {planMonths.map(String).join(", ")}
-        <br />品目コードが空欄の場合は製造器種名で自動照合します。
+        <br />品目コードで照合します。品目コードがない場合は製造器種名（参考）列で照合します。
       </div>
 
       {/* テンプレートDL */}
@@ -233,7 +224,7 @@ function CsvImportSection({
               <tbody className="divide-y divide-gray-100">
                 {preview.map((r, i) => (
                   <tr key={i} className={`hover:bg-gray-50 ${!r.isKnown ? "bg-amber-50/50" : ""}`}>
-                    <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.manufacturingItemCode}</td>
+                    <td className="px-3 py-2 font-mono text-gray-600 whitespace-nowrap">{r.modelCode}</td>
                     {r.plans.map(({ yearMonth, salesPlan }) => (
                       <td key={yearMonth} className="px-3 py-2 text-right font-medium text-gray-800">
                         {salesPlan.toLocaleString()}
@@ -268,27 +259,24 @@ function CsvImportSection({
 
 // ── メインコンポーネント ──
 export default function SalesPlanTab() {
-  const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
-  const salesPlanOverrides = useMasterStore((s) => s.salesPlanOverrides);
+  const planBaseMonth        = useMasterStore((s) => s.planBaseMonth);
+  const salesPlanOverrides   = useMasterStore((s) => s.salesPlanOverrides);
   const setSalesPlanOverride = useMasterStore((s) => s.setSalesPlanOverride);
   const clearSalesPlanOverride = useMasterStore((s) => s.clearSalesPlanOverride);
-  const productMasters = useMasterStore((s) => s.productMasters);
-
-  const codeByModelCode = useMemo(
-    () => new Map(productMasters.map((pm) => [pm.modelCode, pm.code])),
-    [productMasters]
-  );
+  const productMasters       = useMasterStore((s) => s.productMasters);
 
   const planMonths = getPlanMonths(planBaseMonth);
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() =>
-    products.filter((p) => {
+    productMasters.filter((pm) => {
+      if (pm.active === false) return false;
       const q = search.toLowerCase();
-      const code = codeByModelCode.get(p.manufacturingItemCode) ?? "";
-      return !q || code.toLowerCase().includes(q) || p.manufacturingItemCode.toLowerCase().includes(q);
+      return !q
+        || pm.code.toLowerCase().includes(q)
+        || pm.modelCode.toLowerCase().includes(q);
     }),
-    [search, codeByModelCode]
+    [search, productMasters]
   );
 
   const getOverride = useCallback(
@@ -297,10 +285,10 @@ export default function SalesPlanTab() {
     [salesPlanOverrides]
   );
 
-  function handleBlur(productId: string, ym: number, rawValue: string, fallback: number) {
+  function handleBlur(productId: string, ym: number, rawValue: string) {
     const num = parseInt(rawValue.replace(/,/g, ""), 10);
     if (isNaN(num) || num < 0) return;
-    if (num === fallback) {
+    if (num === 0) {
       clearSalesPlanOverride(productId, ym);
     } else {
       setSalesPlanOverride(productId, ym, num);
@@ -318,12 +306,9 @@ export default function SalesPlanTab() {
   // CSVインポート確定
   function handleCsvImport(rows: PreviewRow[]) {
     rows.forEach((row) => {
+      if (!row.productId) return;
       row.plans.forEach(({ yearMonth, salesPlan }) => {
-        if (!row.productId) return;
-        const product = products.find((p) => p.id === row.productId);
-        if (!product) return;
-        const basePlan = product.monthlyPlans.find((m) => m.yearMonth === yearMonth);
-        if (salesPlan === (basePlan?.salesPlan ?? 0)) {
+        if (salesPlan === 0) {
           clearSalesPlanOverride(row.productId, yearMonth);
         } else {
           setSalesPlanOverride(row.productId, yearMonth, salesPlan);
@@ -366,7 +351,7 @@ export default function SalesPlanTab() {
         </div>
         {overrideCount > 0 && (
           <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-2 py-1">
-            {overrideCount} セル変更中
+            {overrideCount} セル入力中
           </span>
         )}
       </div>
@@ -388,30 +373,29 @@ export default function SalesPlanTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((p) => {
-                const modified = hasAnyOverride(p.id);
+              {filtered.map((pm) => {
+                const id = pmKey(pm);
+                const modified = hasAnyOverride(id);
                 return (
-                  <tr key={p.id} className={`hover:bg-gray-50 ${modified ? "bg-blue-50/30" : ""}`}>
+                  <tr key={id} className={`hover:bg-gray-50 ${modified ? "bg-blue-50/30" : ""}`}>
                     <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800 whitespace-nowrap sticky left-0 bg-inherit z-10">
-                      {codeByModelCode.get(p.manufacturingItemCode) || <span className="text-gray-400">—</span>}
+                      {pm.code || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-500 font-mono whitespace-nowrap sticky left-[120px] bg-inherit z-10">
-                      {p.manufacturingItemCode}
+                      {pm.modelCode}
                     </td>
                     {planMonths.map((ym) => {
-                      const basePlan = p.monthlyPlans.find((m) => m.yearMonth === ym);
-                      const fallback = basePlan?.salesPlan ?? 0;
-                      const overrideVal = getOverride(p.id, ym);
-                      const displayVal = overrideVal ?? fallback;
-                      const changed = overrideVal !== undefined && overrideVal !== fallback;
+                      const overrideVal = getOverride(id, ym);
+                      const displayVal  = overrideVal ?? 0;
+                      const changed     = overrideVal !== undefined && overrideVal !== 0;
                       return (
                         <td key={ym} className="px-2 py-1.5 text-right">
                           <input
                             type="number"
                             defaultValue={displayVal}
-                            key={`${p.id}-${ym}-${displayVal}`}
+                            key={`${id}-${ym}-${displayVal}`}
                             min={0}
-                            onBlur={(e) => handleBlur(p.id, ym, e.target.value, fallback)}
+                            onBlur={(e) => handleBlur(id, ym, e.target.value)}
                             className={`w-20 text-right text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                               changed
                                 ? "border-blue-400 bg-blue-50 text-blue-800 font-semibold"
@@ -424,7 +408,7 @@ export default function SalesPlanTab() {
                     <td className="px-2 py-1.5 text-center">
                       {modified && (
                         <button
-                          onClick={() => clearProduct(p.id)}
+                          onClick={() => clearProduct(id)}
                           title="この品目の変更をリセット"
                           className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
                         >
@@ -439,7 +423,11 @@ export default function SalesPlanTab() {
           </table>
 
           {filtered.length === 0 && (
-            <div className="py-12 text-center text-gray-400 text-sm">該当する品目が見つかりません</div>
+            <div className="py-12 text-center text-gray-400 text-sm">
+              {productMasters.length === 0
+                ? "製品マスターに品目が登録されていません"
+                : "該当する品目が見つかりません"}
+            </div>
           )}
         </div>
       </div>

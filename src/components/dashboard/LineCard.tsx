@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { products, addMonths, getPlanMonths, formatYearMonth } from "@/lib/data";
+import { addMonths, getPlanMonths, formatYearMonth } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { useLeveledPlans } from "@/lib/useLeveledPlans";
+import { pmKey } from "@/lib/masterTypes";
 import {
   ComposedChart,
   LineChart,
@@ -38,9 +39,9 @@ function formatYM(ym: number) {
 
 export default function LineCard({ lineNumbers, title, subtitle, color, isGroupSummary }: Props) {
   const planBaseMonth  = useMasterStore((s) => s.planBaseMonth);
-  const salesOverrides = useMasterStore((s) => s.salesPlanOverrides);
   const masterOpDays   = useMasterStore((s) => s.operatingDays);
   const lineMasters    = useMasterStore((s) => s.lineMasters);
+  const productMasters = useMasterStore((s) => s.productMasters);
 
   const leveledPlansMap = useLeveledPlans();
 
@@ -59,16 +60,10 @@ export default function LineCard({ lineNumbers, title, subtitle, color, isGroupS
     [planBaseMonth]
   );
 
-  // オーバーライドマップ
-  const overrideMap = useMemo(() =>
-    new Map(salesOverrides.map((o) => [`${o.productId}:${o.yearMonth}`, o.salesPlan])),
-    [salesOverrides]
-  );
-
-  // このカードに属する品目
+  // このカードに属する品目（productMasters から）
   const lineProducts = useMemo(() =>
-    products.filter((p) => lineNumbers.includes(p.primaryLine)),
-    [lineNumbers]
+    productMasters.filter((pm) => pm.active !== false && lineNumbers.includes(pm.primaryLine)),
+    [lineNumbers, productMasters]
   );
 
   // 月別集計
@@ -78,19 +73,12 @@ export default function LineCard({ lineNumbers, title, subtitle, color, isGroupS
       let totalEndInv   = 0;
       let totalSchedule = 0;
 
-      lineProducts.forEach((p) => {
-        const leveled = leveledPlansMap.get(p.id)?.get(ym);
+      lineProducts.forEach((pm) => {
+        const leveled = leveledPlansMap.get(pmKey(pm))?.get(ym);
         if (leveled) {
           totalSales    += leveled.salesPlan;
           totalEndInv   += leveled.monthEndInventory;
           totalSchedule += leveled.productionSchedule;
-        } else {
-          const mp = p.monthlyPlans.find((m) => m.yearMonth === ym);
-          if (!mp) return;
-          const override = overrideMap.get(`${p.id}:${ym}`);
-          totalSales    += override ?? mp.salesPlan;
-          totalEndInv   += mp.monthEndInventory;
-          totalSchedule += mp.productionSchedule;
         }
       });
 
@@ -109,7 +97,7 @@ export default function LineCard({ lineNumbers, title, subtitle, color, isGroupS
         isCurrent:               ym === planBaseMonth,
       };
     }),
-    [displayMonths, lineProducts, leveledPlansMap, overrideMap, masterOpDays, planBaseMonth]
+    [displayMonths, lineProducts, leveledPlansMap, masterOpDays, planBaseMonth]
   );
 
   const currentData = chartData.find((d) => d.yearMonth === planBaseMonth) ?? chartData[1];

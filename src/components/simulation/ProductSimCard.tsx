@@ -124,22 +124,34 @@ export default function ProductSimCard({
     return idx >= 0 ? idx : 0;
   }, [product, startYearMonth]);
 
-  // 6ヶ月分の販売計画（startYearMonth 起点）
-  const baseSalesPlans = useMemo(
-    () => product.monthlyPlans.slice(startIdx, startIdx + 6).map((m) => m.salesPlan),
-    [product, startIdx]
-  );
+  const { setSimMonthInputs, simMonthOverrides, salesPlanOverrides } = useMasterStore();
+
+  // 6ヶ月分の販売計画（salesPlanOverrides 優先 → monthlyPlans フォールバック → 0）
+  const baseSalesPlans = useMemo(() => {
+    return product.monthlyPlans.slice(startIdx, startIdx + 6).map((m) => {
+      const override = salesPlanOverrides.find(
+        (o) => o.productId === product.id && o.yearMonth === m.yearMonth
+      );
+      return override !== undefined ? override.salesPlan : m.salesPlan;
+    });
+  }, [product, startIdx, salesPlanOverrides]);
 
   // 7ヶ月目の販売計画（最終月の在庫月数計算用）
-  const month7Sales = useMemo(
-    () =>
-      product.monthlyPlans[startIdx + 6]?.salesPlan ??
-      product.monthlyPlans[product.monthlyPlans.length - 1]?.salesPlan ??
-      0,
-    [product, startIdx]
-  );
-
-  const { setSimMonthInputs, simMonthOverrides } = useMasterStore();
+  const month7Sales = useMemo(() => {
+    const mp7 = product.monthlyPlans[startIdx + 6];
+    if (!mp7) {
+      const last = product.monthlyPlans[product.monthlyPlans.length - 1];
+      if (!last) return 0;
+      const override = salesPlanOverrides.find(
+        (o) => o.productId === product.id && o.yearMonth === last.yearMonth
+      );
+      return override !== undefined ? override.salesPlan : last.salesPlan;
+    }
+    const override = salesPlanOverrides.find(
+      (o) => o.productId === product.id && o.yearMonth === mp7.yearMonth
+    );
+    return override !== undefined ? override.salesPlan : mp7.salesPlan;
+  }, [product, startIdx, salesPlanOverrides]);
 
   const storedInputs = useMemo(() => {
     const stored = simMonthOverrides
