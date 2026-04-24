@@ -51,10 +51,12 @@ function XAxisTick({ x, y, payload, chartData }: { x?: number | string; y?: numb
 }
 
 export default function LineCard({ lineNumbers, title, subtitle, color, isGroupSummary }: Props) {
-  const planBaseMonth  = useMasterStore((s) => s.planBaseMonth);
-  const masterOpDays   = useMasterStore((s) => s.operatingDays);
-  const lineMasters    = useMasterStore((s) => s.lineMasters);
-  const productMasters = useMasterStore((s) => s.productMasters);
+  const planBaseMonth      = useMasterStore((s) => s.planBaseMonth);
+  const masterOpDays       = useMasterStore((s) => s.operatingDays);
+  const lineMasters        = useMasterStore((s) => s.lineMasters);
+  const productMasters     = useMasterStore((s) => s.productMasters);
+  const inventorySnapshots = useMasterStore((s) => s.inventorySnapshots);
+  const salesPlanOverrides = useMasterStore((s) => s.salesPlanOverrides);
 
   const leveledPlansMap = useLeveledPlans();
 
@@ -85,13 +87,23 @@ export default function LineCard({ lineNumbers, title, subtitle, color, isGroupS
       let totalSales    = 0;
       let totalEndInv   = 0;
       let totalSchedule = 0;
+      const isPrevMonth = ym === addMonths(planBaseMonth, -1);
 
       lineProducts.forEach((pm) => {
-        const leveled = leveledPlansMap.get(pmKey(pm))?.get(ym);
-        if (leveled) {
-          totalSales    += leveled.salesPlan;
-          totalEndInv   += leveled.monthEndInventory;
-          totalSchedule += leveled.productionSchedule;
+        const key = pmKey(pm);
+        if (isPrevMonth) {
+          // 前月：在庫スナップショット + 販売計画オーバーライドから取得
+          const snap = inventorySnapshots.find((s) => s.yearMonth === ym && s.productCode === key);
+          const ov   = salesPlanOverrides.find((o) => o.productId === key && o.yearMonth === ym);
+          totalEndInv += snap?.quantity ?? 0;
+          totalSales  += ov?.salesPlan ?? 0;
+        } else {
+          const leveled = leveledPlansMap.get(key)?.get(ym);
+          if (leveled) {
+            totalSales    += leveled.salesPlan;
+            totalEndInv   += leveled.monthEndInventory;
+            totalSchedule += leveled.productionSchedule;
+          }
         }
       });
 
@@ -110,7 +122,7 @@ export default function LineCard({ lineNumbers, title, subtitle, color, isGroupS
         isCurrent:               ym === planBaseMonth,
       };
     }),
-    [displayMonths, lineProducts, leveledPlansMap, masterOpDays, planBaseMonth]
+    [displayMonths, lineProducts, leveledPlansMap, masterOpDays, planBaseMonth, inventorySnapshots, salesPlanOverrides]
   );
 
   const currentData = chartData.find((d) => d.yearMonth === planBaseMonth) ?? chartData[1];
