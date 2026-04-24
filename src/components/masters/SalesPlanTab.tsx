@@ -47,19 +47,34 @@ function CsvImportSection({
     return map;
   }, [productMasters]);
 
+  // 各種フォーマットの年月ヘッダーを YYYYMM 数値に変換
+  function parseYearMonth(s: string): number | null {
+    const t = s.trim();
+    // YYYYMM（例: 202506）
+    const n = parseInt(t);
+    if (!isNaN(n) && n > 200000 && n < 210000) return n;
+    // YYYY/MM または YYYY/M（例: 2025/06, 2025/6）
+    const slash = t.match(/^(20\d{2})[\/\-](\d{1,2})$/);
+    if (slash) return parseInt(slash[1]) * 100 + parseInt(slash[2]);
+    // YYYY年M月 または YYYY年MM月（例: 2025年6月, 2025年06月）
+    const jp = t.match(/^(20\d{2})年(\d{1,2})月?$/);
+    if (jp) return parseInt(jp[1]) * 100 + parseInt(jp[2]);
+    return null;
+  }
+
   function parseCSV(text: string): PreviewRow[] {
     const cleaned = text.replace(/^\uFEFF/, "");
     const lines = cleaned.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error("データが不足しています");
 
-    // ヘッダー: 品目コード, 製造器種名（参考）, YYYYMM, ...
+    // ヘッダー: 品目コード, 製造器種名（参考）, 年月列...
     const headers = lines[0].split(",").map((s) => s.trim());
     const monthCols: { colIdx: number; ym: number }[] = [];
     for (let i = 0; i < headers.length; i++) {
-      const ym = parseInt(headers[i]);
-      if (!isNaN(ym) && ym > 200000) monthCols.push({ colIdx: i, ym });
+      const ym = parseYearMonth(headers[i]);
+      if (ym !== null) monthCols.push({ colIdx: i, ym });
     }
-    if (monthCols.length === 0) throw new Error("月列（YYYYMM形式）が見つかりません");
+    if (monthCols.length === 0) throw new Error("月列（YYYYMM / YYYY/MM / YYYY年MM月 形式）が見つかりません");
 
     const rows: PreviewRow[] = [];
     for (let i = 1; i < lines.length; i++) {
@@ -260,6 +275,7 @@ function CsvImportSection({
 // ── メインコンポーネント ──
 export default function SalesPlanTab() {
   const planBaseMonth        = useMasterStore((s) => s.planBaseMonth);
+  const setPlanBaseMonth     = useMasterStore((s) => s.setPlanBaseMonth);
   const salesPlanOverrides   = useMasterStore((s) => s.salesPlanOverrides);
   const setSalesPlanOverride = useMasterStore((s) => s.setSalesPlanOverride);
   const clearSalesPlanOverride = useMasterStore((s) => s.clearSalesPlanOverride);
@@ -305,8 +321,11 @@ export default function SalesPlanTab() {
 
   // CSVインポート確定（一括でstate更新し、Supabase書き込みを1回にまとめる）
   function handleCsvImport(rows: PreviewRow[]) {
+    // CSV内の全yearMonthを収集し、最小月を planBaseMonth に自動セット
+    const allYearMonths = rows.flatMap((r) => r.plans.map((p) => p.yearMonth)).filter((ym) => ym > 200000);
+    const csvFirstMonth = allYearMonths.length > 0 ? Math.min(...allYearMonths) : null;
+
     useMasterStore.setState((s) => {
-      // インポート対象の productId × yearMonth を収集
       const importKeys = new Set<string>();
       rows.forEach((row) => {
         if (!row.productId) return;
@@ -315,12 +334,10 @@ export default function SalesPlanTab() {
         });
       });
 
-      // 既存オーバーライドからインポート対象を除外
       const kept = s.salesPlanOverrides.filter(
         (o) => !importKeys.has(`${o.productId}:${o.yearMonth}`)
       );
 
-      // 新しいオーバーライドを追加（salesPlan > 0 のみ保存）
       const added: typeof s.salesPlanOverrides = [];
       rows.forEach((row) => {
         if (!row.productId) return;
@@ -331,7 +348,11 @@ export default function SalesPlanTab() {
         });
       });
 
-      return { salesPlanOverrides: [...kept, ...added] };
+      return {
+        salesPlanOverrides: [...kept, ...added],
+        // CSVの先頭月が現在の計画開始月と異なる場合は自動更新
+        ...(csvFirstMonth && csvFirstMonth !== s.planBaseMonth ? { planBaseMonth: csvFirstMonth } : {}),
+      };
     });
   }
 
