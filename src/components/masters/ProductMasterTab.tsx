@@ -7,7 +7,6 @@ import { Plus, Pencil, Trash2, Upload, Download, Check, X } from "lucide-react";
 
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
 const METHOD_OPTIONS = ["A:主力製品", "B:在庫製品", "C:計画生産", "D:受注生産"];
-const GAS_OPTIONS = ["", "P", "12A"] as const;
 
 // 生産方式の正規化（"B" や文字化け → "B:在庫製品" など）
 const METHOD_PREFIX_MAP: Record<string, string> = {
@@ -172,12 +171,7 @@ export default function ProductMasterTab() {
           <EditableCell value={buf.modelCode} onChange={(v) => setBuf({ ...buf, modelCode: v })} placeholder="FHE-16AW1-G" />
         </td>
         <td className="px-3 py-2">
-          <select value={buf.gasType ?? ""} onChange={(e) => setBuf({ ...buf, gasType: e.target.value })}
-            className="text-xs border border-blue-300 rounded px-1.5 py-1 bg-white w-full">
-            {GAS_OPTIONS.map((g) => (
-              <option key={g} value={g}>{g || "—"}</option>
-            ))}
-          </select>
+          <EditableCell value={buf.gasType ?? ""} onChange={(v) => setBuf({ ...buf, gasType: v })} placeholder="P / 12A" className="w-20" />
         </td>
         {/* 工場（ライン選択から自動導出・読み取り専用） */}
         <td className="px-3 py-2 text-center text-xs text-gray-400">
