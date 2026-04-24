@@ -154,7 +154,12 @@ export default function SimulationView() {
     setStates((prev) => {
       const cur = prev.get(id);
       if (!cur) return prev;
-      const inputs = cur.inputs.map((inp, i) => i === monthIdx ? { ...inp, [field]: value } : inp);
+      // 在庫月数目標の計画開始月(0)変更時は翌月以降も連動
+      const inputs = cur.inputs.map((inp, i) => {
+        if (i === monthIdx) return { ...inp, [field]: value };
+        if (field === "targetInventoryMonths" && monthIdx === 0 && i > 0) return { ...inp, targetInventoryMonths: value };
+        return inp;
+      });
       const next = new Map(prev);
       next.set(id, { ...cur, inputs });
       setSimMonthInputs(id, inputs);
