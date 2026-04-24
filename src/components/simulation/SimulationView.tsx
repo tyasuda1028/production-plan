@@ -118,12 +118,14 @@ export default function SimulationView() {
   const [states, setStates] = useState<Map<string, ProductState>>(() => new Map());
 
   // 品目が変わったり planBaseMonth が変わったら状態を初期化
+  // planBaseMonth 変更時は initialInventory を前月スナップショット値に連動させる
   useEffect(() => {
     setStates((prev) => {
       const next = new Map<string, ProductState>();
       filtered.forEach((p) => {
         if (prev.has(p.id)) {
-          next.set(p.id, prev.get(p.id)!);
+          // 既存 state の inputs は維持しつつ、前月末在庫は常に最新スナップショットに連動
+          next.set(p.id, { ...prev.get(p.id)!, initialInventory: p.lastMonthInventory });
           return;
         }
         // simMonthOverrides から復元
