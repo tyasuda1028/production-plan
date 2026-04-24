@@ -219,17 +219,21 @@ export const useMasterStore = create<MasterStore>()(
           return { inventorySnapshots: [...filtered, snap] };
         }),
 
-      importInventoryCSV: (yearMonth, rows) => {
-        const now = new Date().toISOString();
-        rows.forEach((r) => {
-          get().upsertInventory({
+      importInventoryCSV: (yearMonth, rows) =>
+        set((s) => {
+          const now = new Date().toISOString();
+          const incoming = rows.map((r) => ({
             yearMonth,
             productCode: r.code,
             quantity: r.quantity,
             updatedAt: now,
-          });
-        });
-      },
+          }));
+          const incomingKeys = new Set(incoming.map((i) => `${i.yearMonth}:${i.productCode}`));
+          const kept = s.inventorySnapshots.filter(
+            (i) => !incomingKeys.has(`${i.yearMonth}:${i.productCode}`)
+          );
+          return { inventorySnapshots: [...kept, ...incoming] };
+        }),
 
       getInventory: (yearMonth) => {
         const snaps = get().inventorySnapshots.filter(

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useMasterStore } from "@/lib/masterStore";
-import { getPlanMonths, formatYearMonth } from "@/lib/data";
+import { getPlanMonths, formatYearMonth, addMonths } from "@/lib/data";
 import { Upload, FileText, Check, AlertTriangle, Download } from "lucide-react";
 
 interface PreviewRow {
@@ -14,8 +14,9 @@ interface PreviewRow {
 
 export default function InventoryImportTab() {
   const { productMasters, importInventoryCSV, getInventory, inventorySnapshots, planBaseMonth } = useMasterStore();
-  const planMonths = getPlanMonths(planBaseMonth);
-  const [targetYM, setTargetYM] = useState(planBaseMonth);
+  const prevMonth = addMonths(planBaseMonth, -1);
+  const planMonths = [prevMonth, ...getPlanMonths(planBaseMonth)];
+  const [targetYM, setTargetYM] = useState(prevMonth);
   const [preview, setPreview] = useState<PreviewRow[] | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
