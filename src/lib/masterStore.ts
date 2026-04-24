@@ -177,7 +177,7 @@ export const useMasterStore = create<MasterStore>()(
 
       deleteProduct: (code) =>
         set((s) => ({
-          productMasters: s.productMasters.filter((p) => p.code !== code),
+          productMasters: s.productMasters.filter((p) => (p.code || p.modelCode) !== code),
         })),
 
       importProducts: (rows) =>
