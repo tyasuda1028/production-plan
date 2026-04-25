@@ -368,6 +368,20 @@ export default function SalesPlanTab() {
 
   const overrideCount = salesPlanOverrides.length;
 
+  // 登録済み年の一覧
+  const overrideYears = useMemo(() => {
+    const years = new Set(salesPlanOverrides.map((o) => Math.floor(o.yearMonth / 100)));
+    return Array.from(years).sort();
+  }, [salesPlanOverrides]);
+
+  function clearYear(year: number) {
+    useMasterStore.setState((s) => ({
+      salesPlanOverrides: s.salesPlanOverrides.filter(
+        (o) => Math.floor(o.yearMonth / 100) !== year
+      ),
+    }));
+  }
+
   return (
     <div className="space-y-4">
       {/* 説明 */}
@@ -384,8 +398,8 @@ export default function SalesPlanTab() {
         salesPlanOverrides={salesPlanOverrides}
       />
 
-      {/* 検索バー */}
-      <div className="flex items-center gap-3">
+      {/* 検索バー + 年別クリア */}
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-1 max-w-sm bg-white border border-gray-200 rounded px-3 py-1.5">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
@@ -401,6 +415,15 @@ export default function SalesPlanTab() {
             {overrideCount} セル入力中
           </span>
         )}
+        {overrideYears.map((year) => (
+          <button
+            key={year}
+            onClick={() => clearYear(year)}
+            className="text-xs border border-red-200 text-red-500 hover:bg-red-50 rounded px-2 py-1"
+          >
+            {year}年分を削除
+          </button>
+        ))}
       </div>
 
       {/* グリッドテーブル */}
