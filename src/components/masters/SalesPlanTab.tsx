@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { getPlanMonths, formatYearMonth } from "@/lib/data";
 import { ProductMaster, SalesPlanOverride, pmKey } from "@/lib/masterTypes";
-import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle } from "lucide-react";
+import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle, Trash2 } from "lucide-react";
 
 // ── CSV インポート関連型 ──
 interface PreviewRow {
@@ -368,17 +368,9 @@ export default function SalesPlanTab() {
 
   const overrideCount = salesPlanOverrides.length;
 
-  // 登録済み年の一覧
-  const overrideYears = useMemo(() => {
-    const years = new Set(salesPlanOverrides.map((o) => Math.floor(o.yearMonth / 100)));
-    return Array.from(years).sort();
-  }, [salesPlanOverrides]);
-
-  function clearYear(year: number) {
+  function clearMonth(ym: number) {
     useMasterStore.setState((s) => ({
-      salesPlanOverrides: s.salesPlanOverrides.filter(
-        (o) => Math.floor(o.yearMonth / 100) !== year
-      ),
+      salesPlanOverrides: s.salesPlanOverrides.filter((o) => o.yearMonth !== ym),
     }));
   }
 
@@ -398,8 +390,8 @@ export default function SalesPlanTab() {
         salesPlanOverrides={salesPlanOverrides}
       />
 
-      {/* 検索バー + 年別クリア */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* 検索バー */}
+      <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 flex-1 max-w-sm bg-white border border-gray-200 rounded px-3 py-1.5">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
@@ -415,15 +407,6 @@ export default function SalesPlanTab() {
             {overrideCount} セル入力中
           </span>
         )}
-        {overrideYears.map((year) => (
-          <button
-            key={year}
-            onClick={() => clearYear(year)}
-            className="text-xs border border-red-200 text-red-500 hover:bg-red-50 rounded px-2 py-1"
-          >
-            {year}年分を削除
-          </button>
-        ))}
       </div>
 
       {/* グリッドテーブル */}
@@ -435,8 +418,17 @@ export default function SalesPlanTab() {
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50 z-10">品目コード</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[120px] bg-gray-50 z-10">製造器種名</th>
                 {displayMonths.map((ym) => (
-                  <th key={ym} className={`px-3 py-3 text-right text-xs font-medium whitespace-nowrap min-w-[90px] ${planMonths.includes(ym) ? "text-blue-600" : "text-gray-400"}`}>
-                    {formatYearMonth(ym)}
+                  <th key={ym} className={`px-2 py-2 text-right text-xs font-medium whitespace-nowrap min-w-[90px] ${planMonths.includes(ym) ? "text-blue-600" : "text-gray-400"}`}>
+                    <div className="flex items-center justify-end gap-1">
+                      <span>{formatYearMonth(ym)}</span>
+                      <button
+                        onClick={() => clearMonth(ym)}
+                        title={`${formatYearMonth(ym)}の販売計画を全削除`}
+                        className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </th>
                 ))}
                 <th className="px-3 py-3 w-10" />
