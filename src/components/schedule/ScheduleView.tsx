@@ -141,26 +141,59 @@ export default function ScheduleView() {
     return count;
   }, [factoryGroups]);
 
+  /**
+   * 月次生産数をパレット単位で稼働日に均等割り付けする。
+   * 返値: Map<稼働日番号, その日の生産台数>
+   * 例) 5パレット×20台・稼働20日 → 4日おきに20台
+   */
+  function buildPalletSchedule(
+    productionSchedule: number,
+    capacityPerPallet: number,
+    opDayNums: number[]
+  ): Map<number, number> {
+    const cap = capacityPerPallet > 0 ? capacityPerPallet : 1;
+    const numPallets = productionSchedule > 0 ? Math.round(productionSchedule / cap) : 0;
+    const N = opDayNums.length;
+    const schedule = new Map<number, number>();
+    for (let k = 0; k < numPallets; k++) {
+      // 均等配置: k番目のパレットを稼働日インデックス idx に割り付け
+      const idx = Math.min(Math.floor((k * N) / numPallets + N / numPallets / 2), N - 1);
+      const day = opDayNums[idx];
+      schedule.set(day, (schedule.get(day) ?? 0) + cap);
+    }
+    return schedule;
+  }
+
   // ── ライン別スケジュールテーブル ──────────────────────────────
   function renderLineTable(
     lineMaster: typeof lineMasters[number],
     lineProducts: ProductMaster[],
     color: typeof CLASSIFICATION_COLORS[number]
   ) {
-    // 計画ゼロを除外 → 月計画の多い順にソート
+    // 計画ゼロを除外 → 販売計画の多い順にソート
     const sortedProducts = [...lineProducts]
-      .filter((p) => getDailyQty(p) > 0)
-      .sort((a, b) => getDailyQty(b) - getDailyQty(a));
+      .filter((p) => (leveledPlansMap.get(pmKey(p))?.get(selectedYM)?.productionSchedule ?? 0) > 0)
+      .sort((a, b) => {
+        const sA = leveledPlansMap.get(pmKey(a))?.get(selectedYM)?.salesPlan ?? 0;
+        const sB = leveledPlansMap.get(pmKey(b))?.get(selectedYM)?.salesPlan ?? 0;
+        return sB - sA;
+      });
 
     if (sortedProducts.length === 0) return null;
 
-    const lineDailyTotals: Record<number, number> = {};
+    // 製品ごとのパレット割り付けスケジュール（販売台数多い順で先に割り付け）
+    const palletSchedules = new Map<string, Map<number, number>>();
     sortedProducts.forEach((p) => {
-      const dq = getDailyQty(p);
-      monthDays.forEach(({ day }) => {
-        if (isOperating(day)) {
-          lineDailyTotals[day] = (lineDailyTotals[day] ?? 0) + dq;
-        }
+      const sched = leveledPlansMap.get(pmKey(p))?.get(selectedYM)?.productionSchedule ?? 0;
+      const cap   = p.capacityPerPallet > 0 ? p.capacityPerPallet : 1;
+      palletSchedules.set(pmKey(p), buildPalletSchedule(sched, cap, operatingDayNums));
+    });
+
+    // ライン日量合計
+    const lineDailyTotals: Record<number, number> = {};
+    palletSchedules.forEach((schedule) => {
+      schedule.forEach((qty, day) => {
+        lineDailyTotals[day] = (lineDailyTotals[day] ?? 0) + qty;
       });
     });
     const lineMonthTotal = Object.values(lineDailyTotals).reduce((s, v) => s + v, 0);
@@ -245,13 +278,15 @@ export default function ScheduleView() {
 
               {/* ── 製品別詳細行 ── */}
               {sortedProducts.map((p) => {
-                const leveled = leveledPlansMap.get(pmKey(p))?.get(selectedYM);
-                const productionSchedule = leveled?.productionSchedule;
-                const dq = getDailyQty(p);
-                const rowTotal = dq * operatingDayNums.length;
+                const key     = pmKey(p);
+                const leveled = leveledPlansMap.get(key)?.get(selectedYM);
+                const productionSchedule = leveled?.productionSchedule ?? 0;
+                const daySchedule = palletSchedules.get(key) ?? new Map<number, number>();
+                const rowTotal = Array.from(daySchedule.values()).reduce((s, v) => s + v, 0);
+                const cap = p.capacityPerPallet > 0 ? p.capacityPerPallet : 1;
 
                 return (
-                  <tr key={pmKey(p)} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap border-r border-gray-200">
                       <div className="flex items-center gap-1.5 leading-tight">
                         {p.code && (
@@ -262,18 +297,22 @@ export default function ScheduleView() {
                           <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-medium">{p.gasType}</span>
                         )}
                       </div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {productionSchedule.toLocaleString()}台 / {cap}台×{Math.round(productionSchedule / cap)}パレット
+                      </div>
                     </td>
                     <td className="px-2 py-1.5 text-right font-medium text-blue-700 border-r border-gray-200">
-                      {productionSchedule != null ? productionSchedule.toLocaleString() : "-"}
+                      {productionSchedule.toLocaleString()}
                     </td>
                     {monthDays.map(({ day }) => {
-                      const op = isOperating(day);
+                      const op  = isOperating(day);
+                      const qty = daySchedule.get(day) ?? 0;
                       if (!op) return (
                         <td key={day} className="px-1 py-1.5 bg-gray-50 text-center text-gray-200">-</td>
                       );
                       return (
-                        <td key={day} className="px-1 py-1.5 text-center text-gray-600 hover:bg-blue-50">
-                          {dq.toLocaleString()}
+                        <td key={day} className={`px-1 py-1.5 text-center ${qty > 0 ? "bg-blue-50 text-blue-800 font-semibold" : "text-gray-200"}`}>
+                          {qty > 0 ? qty.toLocaleString() : "·"}
                         </td>
                       );
                     })}
