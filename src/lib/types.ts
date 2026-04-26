@@ -63,6 +63,7 @@ export interface Product {
   totalInventory: number;
   twoMonthsAgoInventory: number;
   lastMonthInventory: number;
+  capacityPerPallet?: number; // パレット当たり台数
   monthlySales: number[]; // 12ヶ月実績
   monthlyPlans: MonthlyPlan[]; // 6ヶ月計画
   dailyAllocations: DailyAllocation[]; // 日割り

@@ -33,12 +33,16 @@ export interface ProductSimState {
   initialInventory: number;  // 計画開始時点の在庫（前月末在庫）
   inputs: MonthInput[];      // 6ヶ月分の入力（編集可能）
   nextSalesPlan: number;     // 7ヶ月目の販売計画（最終月末在庫月数の計算用）
+  palletSize?: number;       // パレット当たり台数（省略時は1=切り上げなし）
 }
 
 /**
  * 月次シミュレーション計算（全6ヶ月を前月から連鎖計算）
  */
 export function calcSimulation(state: ProductSimState): MonthResult[] {
+  const pallet = (state.palletSize ?? 1) > 0 ? (state.palletSize ?? 1) : 1;
+  const toPallet = (qty: number) => Math.ceil(qty / pallet) * pallet;
+
   const results: MonthResult[] = [];
   let prevInventory = state.initialInventory;
 
@@ -53,11 +57,11 @@ export function calcSimulation(state: ProductSimState): MonthResult[] {
     // 月末在庫目標数量
     const targetInventoryQty = Math.round(input.targetInventoryMonths * nextSales);
 
-    // 生産必要数（マイナスになる場合は0）
-    const requiredProduction = Math.max(
+    // 生産必要数をパレット単位に切り上げ（マイナスになる場合は0）
+    const requiredProduction = toPallet(Math.max(
       0,
       targetInventoryQty + input.salesPlan - prevInventory
-    );
+    ));
 
     // 月末在庫
     const monthEndInventory = prevInventory + requiredProduction - input.salesPlan;

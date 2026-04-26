@@ -198,7 +198,7 @@ export default function SimulationView() {
     const rows: string[][] = [header];
     filtered.forEach((p) => {
       const { inputs, initialInventory } = getState(p.id);
-      const results = calcSimulation({ productId: p.id, initialInventory, inputs, nextSalesPlan: 0 });
+      const results = calcSimulation({ productId: p.id, initialInventory, inputs, nextSalesPlan: 0, palletSize: p.capacityPerPallet });
       const labels = ["販売計画", "在庫月数目標", "生産必要数", "月末在庫数", "月末在庫月数"];
       const dataRows = [
         inputs.map((inp) => String(inp.salesPlan)),
@@ -316,6 +316,7 @@ export default function SimulationView() {
                     initialInventory: st.initialInventory,
                     inputs: st.inputs,
                     nextSalesPlan: 0,
+                    palletSize: p.capacityPerPallet,
                   });
                   const hasShortage = results.some((r) => r.isShortage);
 

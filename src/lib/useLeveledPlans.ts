@@ -40,6 +40,7 @@ export function buildVirtualProduct(
     totalInventory: lastMonthInventory,
     twoMonthsAgoInventory: 0,
     lastMonthInventory,
+    capacityPerPallet: pm.capacityPerPallet ?? 1,
     monthlySales: [],
     monthlyPlans: planMonths.map((ym) => ({
       yearMonth: ym,
@@ -147,11 +148,16 @@ export function buildLeveledPlanForProduct(
 
   const rates = [rate1, rate1, rate1, rate2, rate2, rate2];
 
+  const pallet = (p.capacityPerPallet ?? 1) > 0 ? (p.capacityPerPallet ?? 1) : 1;
+  // パレット単位切り上げヘルパー
+  const toPallet = (qty: number) => Math.ceil(qty / pallet) * pallet;
+
   const result = new Map<number, LeveledPlan>();
   let prevInv = p.lastMonthInventory;
 
   basePlans.forEach((mp, i) => {
-    const productionSchedule      = Math.round(rates[i] * opDays[i]);
+    // 生産数をパレット単位に切り上げ
+    const productionSchedule      = toPallet(Math.round(rates[i] * opDays[i]));
     const surplusDeficit          = productionSchedule - mp.requiredProduction;
     const planAdjustment          = surplusDeficit < 0 ? Math.abs(surplusDeficit) : 0;
     const monthEndInventory       = prevInv + productionSchedule - mp.salesPlan;

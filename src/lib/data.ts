@@ -294,6 +294,7 @@ export const products: Product[] = [
     productionMethod: "D:受注生産", orderQuantity: 0,
     factoryInventory: 0, branchInventory: 0, consignmentInventory: 0, totalInventory: 0,
     twoMonthsAgoInventory: 0, lastMonthInventory: 0,
+  capacityPerPallet: 20,
     monthlySales: [0, 0, 0, 20, 35, 50, 80, 70, 60, 40, 30, 20],
     monthlyPlans: makePlans(55, 0.03),
     dailyAllocations: makeDailyAllocations(55),
