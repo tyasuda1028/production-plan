@@ -31,7 +31,7 @@ export default function Sidebar() {
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
       <div className="px-4 py-4 border-b border-gray-200">
         <Image
-          src="/paloma-logo.svg"
+          src="/paloma-logo.png"
           alt="Paloma"
           width={120}
           height={40}
