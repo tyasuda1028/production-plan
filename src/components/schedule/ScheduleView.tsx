@@ -253,8 +253,14 @@ export default function ScheduleView() {
                 return (
                   <tr key={pmKey(p)} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="sticky left-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap border-r border-gray-200">
-                      <div className="font-medium text-gray-700 font-mono leading-tight">
-                        {p.modelCode}
+                      <div className="flex items-center gap-1.5 leading-tight">
+                        {p.code && (
+                          <span className="text-[10px] text-gray-400 font-mono">{p.code}</span>
+                        )}
+                        <span className="font-medium text-gray-700 font-mono">{p.modelCode}</span>
+                        {p.gasType && (
+                          <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-medium">{p.gasType}</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-2 py-1.5 text-right font-medium text-blue-700 border-r border-gray-200">
