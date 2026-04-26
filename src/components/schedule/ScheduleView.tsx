@@ -147,10 +147,12 @@ export default function ScheduleView() {
     lineProducts: ProductMaster[],
     color: typeof CLASSIFICATION_COLORS[number]
   ) {
-    // 月計画（日量）の多い順にソート
-    const sortedProducts = [...lineProducts].sort(
-      (a, b) => getDailyQty(b) - getDailyQty(a)
-    );
+    // 計画ゼロを除外 → 月計画の多い順にソート
+    const sortedProducts = [...lineProducts]
+      .filter((p) => getDailyQty(p) > 0)
+      .sort((a, b) => getDailyQty(b) - getDailyQty(a));
+
+    if (sortedProducts.length === 0) return null;
 
     const lineDailyTotals: Record<number, number> = {};
     sortedProducts.forEach((p) => {
@@ -163,6 +165,9 @@ export default function ScheduleView() {
     });
     const lineMonthTotal = Object.values(lineDailyTotals).reduce((s, v) => s + v, 0);
 
+    const ymStr = String(selectedYM);
+    const monthLabel = `${ymStr.slice(0, 4)}年${ymStr.slice(4)}月`;
+
     return (
       <div key={lineMaster.lineNumber} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         {/* ライン ヘッダー */}
@@ -172,19 +177,34 @@ export default function ScheduleView() {
           <span className="text-xs opacity-75">
             日量能力 {(lineMaster.dailyCapacity ?? 0).toLocaleString()} 台/日
           </span>
+          <span className="text-xs opacity-90 font-semibold ml-2">{monthLabel}</span>
+          <span className="text-xs opacity-75">稼働 {operatingDayNums.length} 日</span>
           <span className="ml-auto text-xs opacity-75">{sortedProducts.length} 品目</span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="text-xs border-collapse min-w-max">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40">
+              {/* 年月ヘッダー行 */}
+              <tr className="border-b border-gray-200">
+                <th className="sticky left-0 z-10 bg-gray-50 px-3 py-1.5 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40">
                   製造器種名
                 </th>
-                <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-16">
+                <th className="px-2 py-1.5 text-right text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-16 bg-gray-50">
                   月計画
                 </th>
+                <th
+                  colSpan={monthDays.length}
+                  className="px-3 py-1.5 text-center text-blue-700 font-bold bg-blue-50 border-r border-gray-200"
+                >
+                  {monthLabel}（稼働日 {operatingDayNums.length}日）
+                </th>
+                <th className="px-2 py-1.5 text-right text-gray-500 font-medium whitespace-nowrap min-w-16 bg-gray-50">合計</th>
+              </tr>
+              {/* 日付ヘッダー行 */}
+              <tr className="bg-gray-50 border-b-2 border-gray-300">
+                <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40" />
+                <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-16" />
                 {monthDays.map(({ day, dow }) => {
                   const op = isOperating(day);
                   return (
@@ -201,10 +221,29 @@ export default function ScheduleView() {
                     </th>
                   );
                 })}
-                <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap min-w-16">合計</th>
+                <th className="px-2 py-2 text-right text-gray-500 font-medium whitespace-nowrap min-w-16" />
               </tr>
             </thead>
             <tbody>
+              {/* ── ライン合計行（上部） ── */}
+              <tr className={`border-b-2 border-gray-300 ${color.total}`}>
+                <td className={`sticky left-0 z-10 px-3 py-2.5 font-bold border-r border-gray-200 whitespace-nowrap ${color.total}`}>
+                  {lineMaster.lineName} 合計
+                </td>
+                <td className="px-2 py-2.5 text-right font-bold text-gray-800 border-r border-gray-200">
+                  {lineMonthTotal.toLocaleString()}
+                </td>
+                {monthDays.map(({ day }) => (
+                  <td key={day} className={`px-1 py-2.5 text-center font-bold ${isOperating(day) ? "text-gray-900" : "text-gray-200"}`}>
+                    {isOperating(day) ? (lineDailyTotals[day] ?? 0).toLocaleString() : "-"}
+                  </td>
+                ))}
+                <td className="px-2 py-2.5 text-right font-bold text-gray-900">
+                  {lineMonthTotal.toLocaleString()}
+                </td>
+              </tr>
+
+              {/* ── 製品別詳細行 ── */}
               {sortedProducts.map((p) => {
                 const leveled = leveledPlansMap.get(pmKey(p))?.get(selectedYM);
                 const productionSchedule = leveled?.productionSchedule;
@@ -213,47 +252,31 @@ export default function ScheduleView() {
 
                 return (
                   <tr key={pmKey(p)} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap border-r border-gray-200">
-                      <div className="font-medium text-gray-800 font-mono leading-tight">
+                    <td className="sticky left-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap border-r border-gray-200">
+                      <div className="font-medium text-gray-700 font-mono leading-tight">
                         {p.modelCode}
                       </div>
                     </td>
-                    <td className="px-2 py-2 text-right font-medium text-blue-700 border-r border-gray-200">
+                    <td className="px-2 py-1.5 text-right font-medium text-blue-700 border-r border-gray-200">
                       {productionSchedule != null ? productionSchedule.toLocaleString() : "-"}
                     </td>
                     {monthDays.map(({ day }) => {
                       const op = isOperating(day);
                       if (!op) return (
-                        <td key={day} className="px-1 py-2 bg-gray-50 text-center text-gray-200">-</td>
+                        <td key={day} className="px-1 py-1.5 bg-gray-50 text-center text-gray-200">-</td>
                       );
                       return (
-                        <td key={day} className="px-1 py-2 text-center text-gray-700 hover:bg-blue-50">
-                          {dq > 0 ? dq.toLocaleString() : <span className="text-gray-200">0</span>}
+                        <td key={day} className="px-1 py-1.5 text-center text-gray-600 hover:bg-blue-50">
+                          {dq.toLocaleString()}
                         </td>
                       );
                     })}
-                    <td className="px-2 py-2 text-right font-semibold text-gray-800">
+                    <td className="px-2 py-1.5 text-right font-semibold text-gray-700">
                       {rowTotal.toLocaleString()}
                     </td>
                   </tr>
                 );
               })}
-
-              {/* ライン合計行 */}
-              <tr className={`border-t-2 border-gray-300 ${color.total}`}>
-                <td className={`sticky left-0 z-10 px-3 py-2 font-bold border-r border-gray-200 whitespace-nowrap ${color.total}`}>
-                  {lineMaster.lineName} 合計
-                </td>
-                <td className="px-2 py-2 border-r border-gray-200" />
-                {monthDays.map(({ day }) => (
-                  <td key={day} className={`px-1 py-2 text-center font-semibold ${isOperating(day) ? "text-gray-800" : "text-gray-200"}`}>
-                    {isOperating(day) ? (lineDailyTotals[day] ?? 0).toLocaleString() : "-"}
-                  </td>
-                ))}
-                <td className="px-2 py-2 text-right font-bold text-gray-900">
-                  {lineMonthTotal.toLocaleString()}
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
