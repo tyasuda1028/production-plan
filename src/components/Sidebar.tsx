@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import React from "react";
-import { LayoutDashboard, Table2, CalendarDays, Factory, FlaskConical, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Table2, CalendarDays, FlaskConical, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMasterStore } from "@/lib/masterStore";
 import { formatYearMonth, addMonths } from "@/lib/data";
 
@@ -28,11 +29,17 @@ export default function Sidebar() {
 
   return (
     <aside className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
-      <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-200">
-        <Factory className="w-6 h-6 text-blue-600" />
+      <div className="px-4 py-4 border-b border-gray-200">
+        <Image
+          src="/paloma-logo.svg"
+          alt="Paloma"
+          width={120}
+          height={40}
+          className="mb-2"
+          style={{ objectFit: "contain" }}
+        />
         <span className="font-bold text-gray-800 text-sm leading-tight">
-          生産計画<br />
-          <span className="text-xs text-gray-500 font-normal">ブライツ</span>
+          生産計画システム<br />
         </span>
       </div>
 
