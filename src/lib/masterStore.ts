@@ -101,6 +101,9 @@ interface MasterStore {
   setSimMonthOverride: (productId: string, yearMonth: number, field: 'salesPlan' | 'targetInventoryMonths', value: number) => void;
   setSimMonthInputs: (productId: string, inputs: Array<{yearMonth: number; salesPlan: number; targetInventoryMonths: number}>) => void;
   clearSimMonthOverrides: (productId: string) => void;
+
+  // 年別データ一括削除
+  clearYearData: (year: number) => void;
 }
 
 export const useMasterStore = create<MasterStore>()(
@@ -301,6 +304,17 @@ export const useMasterStore = create<MasterStore>()(
         set((s) => ({
           simMonthOverrides: s.simMonthOverrides.filter((o) => o.productId !== productId),
         })),
+
+      clearYearData: (year) =>
+        set((s) => {
+          const notInYear = (ym: number) => Math.floor(ym / 100) !== year;
+          return {
+            salesPlanOverrides: s.salesPlanOverrides.filter((o) => notInYear(o.yearMonth)),
+            inventorySnapshots: s.inventorySnapshots.filter((o) => notInYear(o.yearMonth)),
+            simMonthOverrides:  s.simMonthOverrides.filter((o)  => notInYear(o.yearMonth)),
+            operatingDays:      s.operatingDays.filter((o)      => notInYear(o.yearMonth)),
+          };
+        }),
     }),
     {
       name: 'production-plan-masters',
