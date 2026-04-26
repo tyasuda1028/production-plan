@@ -189,11 +189,15 @@ export default function ScheduleView() {
       palletSchedules.set(pmKey(p), buildPalletSchedule(sched, cap, operatingDayNums));
     });
 
-    // ライン日量合計
+    // ライン日量合計・パレット合計
     const lineDailyTotals: Record<number, number> = {};
-    palletSchedules.forEach((schedule) => {
+    const lineDailyPallets: Record<number, number> = {};
+    sortedProducts.forEach((p) => {
+      const cap = p.capacityPerPallet > 0 ? p.capacityPerPallet : 1;
+      const schedule = palletSchedules.get(pmKey(p)) ?? new Map<number, number>();
       schedule.forEach((qty, day) => {
-        lineDailyTotals[day] = (lineDailyTotals[day] ?? 0) + qty;
+        lineDailyTotals[day]  = (lineDailyTotals[day]  ?? 0) + qty;
+        lineDailyPallets[day] = (lineDailyPallets[day] ?? 0) + Math.round(qty / cap);
       });
     });
     const lineMonthTotal = Object.values(lineDailyTotals).reduce((s, v) => s + v, 0);
@@ -266,11 +270,20 @@ export default function ScheduleView() {
                 <td className="px-2 py-2.5 text-right font-bold text-gray-800 border-r border-gray-200">
                   {lineMonthTotal.toLocaleString()}
                 </td>
-                {monthDays.map(({ day }) => (
-                  <td key={day} className={`px-1 py-2.5 text-center font-bold ${isOperating(day) ? "text-gray-900" : "text-gray-200"}`}>
-                    {isOperating(day) ? (lineDailyTotals[day] ?? 0).toLocaleString() : "-"}
-                  </td>
-                ))}
+                {monthDays.map(({ day }) => {
+                  const qty     = lineDailyTotals[day]  ?? 0;
+                  const pallets = lineDailyPallets[day] ?? 0;
+                  return (
+                    <td key={day} className={`px-1 py-1.5 text-center font-bold ${isOperating(day) ? "text-gray-900" : "text-gray-200"}`}>
+                      {isOperating(day) ? (
+                        <>
+                          <div>{qty.toLocaleString()}</div>
+                          {pallets > 0 && <div className="text-[9px] font-normal text-gray-400">{pallets}枚</div>}
+                        </>
+                      ) : "-"}
+                    </td>
+                  );
+                })}
                 <td className="px-2 py-2.5 text-right font-bold text-gray-900">
                   {lineMonthTotal.toLocaleString()}
                 </td>
@@ -312,7 +325,12 @@ export default function ScheduleView() {
                       );
                       return (
                         <td key={day} className={`px-1 py-1.5 text-center ${qty > 0 ? "bg-blue-50 text-blue-800 font-semibold" : "text-gray-200"}`}>
-                          {qty > 0 ? qty.toLocaleString() : "·"}
+                          {qty > 0 ? (
+                            <>
+                              <div>{qty.toLocaleString()}</div>
+                              <div className="text-[9px] font-normal text-blue-400">{Math.round(qty / cap)}枚</div>
+                            </>
+                          ) : "·"}
                         </td>
                       );
                     })}
