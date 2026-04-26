@@ -278,7 +278,7 @@ export default function ScheduleView() {
                       {isOperating(day) ? (
                         <>
                           <div>{qty.toLocaleString()}</div>
-                          {pallets > 0 && <div className="text-[9px] font-normal text-gray-400">{pallets}枚</div>}
+                          {pallets > 0 && <div className="text-[9px] font-normal text-gray-400">{pallets}</div>}
                         </>
                       ) : "-"}
                     </td>
@@ -328,7 +328,7 @@ export default function ScheduleView() {
                           {qty > 0 ? (
                             <>
                               <div>{qty.toLocaleString()}</div>
-                              <div className="text-[9px] font-normal text-blue-400">{Math.round(qty / cap)}枚</div>
+                              <div className="text-[9px] font-normal text-blue-400">{Math.round(qty / cap)}</div>
                             </>
                           ) : "·"}
                         </td>
