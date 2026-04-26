@@ -147,8 +147,13 @@ export default function ScheduleView() {
     lineProducts: ProductMaster[],
     color: typeof CLASSIFICATION_COLORS[number]
   ) {
+    // 月計画（日量）の多い順にソート
+    const sortedProducts = [...lineProducts].sort(
+      (a, b) => getDailyQty(b) - getDailyQty(a)
+    );
+
     const lineDailyTotals: Record<number, number> = {};
-    lineProducts.forEach((p) => {
+    sortedProducts.forEach((p) => {
       const dq = getDailyQty(p);
       monthDays.forEach(({ day }) => {
         if (isOperating(day)) {
@@ -167,7 +172,7 @@ export default function ScheduleView() {
           <span className="text-xs opacity-75">
             日量能力 {(lineMaster.dailyCapacity ?? 0).toLocaleString()} 台/日
           </span>
-          <span className="ml-auto text-xs opacity-75">{lineProducts.length} 品目</span>
+          <span className="ml-auto text-xs opacity-75">{sortedProducts.length} 品目</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -200,7 +205,7 @@ export default function ScheduleView() {
               </tr>
             </thead>
             <tbody>
-              {lineProducts.map((p) => {
+              {sortedProducts.map((p) => {
                 const leveled = leveledPlansMap.get(pmKey(p))?.get(selectedYM);
                 const productionSchedule = leveled?.productionSchedule;
                 const dq = getDailyQty(p);
