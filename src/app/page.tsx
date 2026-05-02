@@ -47,7 +47,7 @@ function ClassificationGroup({
 
       {isSingleLine || isFiltered ? (
         /* 1ライン or フィルター中 → 各ラインカードを直接表示 */
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleLines.map((l) => (
             <LineCard
               key={l.lineNumber}
@@ -80,7 +80,7 @@ function ClassificationGroup({
           </button>
 
           {open && (
-            <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 pl-2 border-l-2 border-gray-100">
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pl-2 border-l-2 border-gray-100">
               {visibleLines.map((l) => (
                 <LineCard
                   key={l.lineNumber}
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                 <h2 className="text-sm font-semibold text-gray-400">工場未登録ライン</h2>
                 <div className="h-px flex-1 bg-gray-200" />
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {orphanLines.map((l, i) => (
                   <LineCard
                     key={l.lineNumber}
