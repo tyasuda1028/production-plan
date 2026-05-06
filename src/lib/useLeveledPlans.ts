@@ -138,15 +138,14 @@ export function buildLeveledPlanForProduct(
 
   const opDays = planMonths.map((ym) => opDaysCount.get(ym) ?? DEFAULT_OP_DAYS);
 
-  const req1  = basePlans.slice(0, 3).reduce((s, m) => s + m.requiredProduction, 0);
-  const days1 = opDays.slice(0, 3).reduce((s, d) => s + d, 0);
-  const rate1 = days1 > 0 ? req1 / days1 : 0;
-
-  const req2  = basePlans.slice(3).reduce((s, m) => s + m.requiredProduction, 0);
-  const days2 = opDays.slice(3).reduce((s, d) => s + d, 0);
-  const rate2 = days2 > 0 ? req2 / days2 : 0;
-
-  const rates = [rate1, rate1, rate1, rate2, rate2, rate2];
+  // 3ヶ月ローリング平均レート：当月から3ヶ月分の必要生産量÷稼働日数
+  // 月ごとに「当月〜翌2ヶ月」の平均日量を目標にすることで滑らかな生産計画を実現
+  const rates = basePlans.map((_, i) => {
+    const end    = Math.min(i + 3, basePlans.length);
+    const reqSum = basePlans.slice(i, end).reduce((s, m) => s + m.requiredProduction, 0);
+    const daySum = opDays.slice(i, end).reduce((s, d) => s + d, 0);
+    return daySum > 0 ? reqSum / daySum : 0;
+  });
 
   const pallet = (p.capacityPerPallet ?? 1) > 0 ? (p.capacityPerPallet ?? 1) : 1;
   // パレット単位切り上げヘルパー

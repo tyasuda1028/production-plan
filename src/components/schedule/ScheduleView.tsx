@@ -164,7 +164,7 @@ export default function ScheduleView() {
     const dayLoad = new Map<number, number>();
     opDayNums.forEach((d) => dayLoad.set(d, 0));
 
-    // 全パレットを理想時刻でソート
+    // 全パレットをリスト化（各パレットに月内の理想時刻を付与）
     type Task = { key: string; cap: number; idealTime: number };
     const tasks: Task[] = [];
     products.forEach(({ key, numPallets, capPerPallet }) => {
@@ -172,7 +172,10 @@ export default function ScheduleView() {
         tasks.push({ key, cap: capPerPallet, idealTime: (k + 0.5) / numPallets });
       }
     });
-    tasks.sort((a, b) => a.idealTime - b.idealTime);
+    // LPT（Longest Processing Time）ヒューリスティック：
+    // 大きいパレットから先に最小負荷日へ割り付け → 日量最大・最小の差を最小化
+    // 同サイズは理想時刻順（月内均等分散のため）
+    tasks.sort((a, b) => b.cap - a.cap || a.idealTime - b.idealTime);
 
     // 貪欲割り付け：最小負荷日を選択（同量タイは理想日インデックスに近い方）
     tasks.forEach(({ key, cap, idealTime }) => {
