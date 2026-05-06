@@ -156,8 +156,11 @@ export function buildLeveledPlanForProduct(
   let prevInv = p.lastMonthInventory;
 
   basePlans.forEach((mp, i) => {
-    // 生産数をパレット単位に切り上げ
-    const productionSchedule      = toPallet(Math.round(rates[i] * opDays[i]));
+    // 生産数をパレット単位に切り上げ。必要生産がある場合は最低1パレット保証
+    const roundedQty = Math.round(rates[i] * opDays[i]);
+    const productionSchedule = roundedQty === 0 && mp.requiredProduction > 0
+      ? pallet
+      : toPallet(roundedQty);
     const surplusDeficit          = productionSchedule - mp.requiredProduction;
     const planAdjustment          = surplusDeficit < 0 ? Math.abs(surplusDeficit) : 0;
     const monthEndInventory       = prevInv + productionSchedule - mp.salesPlan;

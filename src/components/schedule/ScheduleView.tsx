@@ -142,26 +142,59 @@ export default function ScheduleView() {
   }, [factoryGroups]);
 
   /**
-   * 月次生産数をパレット単位で稼働日に均等割り付けする。
-   * 返値: Map<稼働日番号, その日の生産台数>
-   * 例) 5パレット×20台・稼働20日 → 4日おきに20台
+   * ライン全製品のパレットを稼働日に協調割り付けし、日量合計をなるべく均一にする。
+   *
+   * アルゴリズム:
+   *   1. 各製品の全パレットに「理想時刻」(0〜1) を付与 → 月全体に均等分散
+   *   2. 全パレットを理想時刻順に並べる
+   *   3. 各パレットを「現在の日量合計が最小」の稼働日に貪欲割り付け
+   *      (同量タイの場合は理想時刻に近い日を優先 → 月内に均等に広がる)
+   *
+   * 返値: Map<productKey, Map<稼働日, 台数>>
    */
-  function buildPalletSchedule(
-    productionSchedule: number,
-    capacityPerPallet: number,
+  function buildLineSchedule(
+    products: Array<{ key: string; numPallets: number; capPerPallet: number }>,
     opDayNums: number[]
-  ): Map<number, number> {
-    const cap = capacityPerPallet > 0 ? capacityPerPallet : 1;
-    const numPallets = productionSchedule > 0 ? Math.round(productionSchedule / cap) : 0;
+  ): Map<string, Map<number, number>> {
     const N = opDayNums.length;
-    const schedule = new Map<number, number>();
-    for (let k = 0; k < numPallets; k++) {
-      // 均等配置: k番目のパレットを稼働日インデックス idx に割り付け
-      const idx = Math.min(Math.floor((k * N) / numPallets + N / numPallets / 2), N - 1);
-      const day = opDayNums[idx];
-      schedule.set(day, (schedule.get(day) ?? 0) + cap);
-    }
-    return schedule;
+    const productSchedules = new Map<string, Map<number, number>>();
+    products.forEach((p) => productSchedules.set(p.key, new Map()));
+    if (N === 0) return productSchedules;
+
+    const dayLoad = new Map<number, number>();
+    opDayNums.forEach((d) => dayLoad.set(d, 0));
+
+    // 全パレットを理想時刻でソート
+    type Task = { key: string; cap: number; idealTime: number };
+    const tasks: Task[] = [];
+    products.forEach(({ key, numPallets, capPerPallet }) => {
+      for (let k = 0; k < numPallets; k++) {
+        tasks.push({ key, cap: capPerPallet, idealTime: (k + 0.5) / numPallets });
+      }
+    });
+    tasks.sort((a, b) => a.idealTime - b.idealTime);
+
+    // 貪欲割り付け：最小負荷日を選択（同量タイは理想日インデックスに近い方）
+    tasks.forEach(({ key, cap, idealTime }) => {
+      const idealIdx = Math.floor(idealTime * N);
+      let minLoad = Infinity;
+      let bestDay = opDayNums[0];
+      let bestDist = Infinity;
+      opDayNums.forEach((d, di) => {
+        const load = dayLoad.get(d) ?? 0;
+        const dist = Math.abs(di - idealIdx);
+        if (load < minLoad || (load === minLoad && dist < bestDist)) {
+          minLoad = load;
+          bestDay = d;
+          bestDist = dist;
+        }
+      });
+      const sched = productSchedules.get(key)!;
+      sched.set(bestDay, (sched.get(bestDay) ?? 0) + cap);
+      dayLoad.set(bestDay, minLoad + cap);
+    });
+
+    return productSchedules;
   }
 
   // ── ライン別スケジュールテーブル ──────────────────────────────
@@ -181,13 +214,13 @@ export default function ScheduleView() {
 
     if (sortedProducts.length === 0) return null;
 
-    // 製品ごとのパレット割り付けスケジュール（販売台数多い順で先に割り付け）
-    const palletSchedules = new Map<string, Map<number, number>>();
-    sortedProducts.forEach((p) => {
+    // ライン全体で協調スケジューリング（日量合計を均一化）
+    const lineScheduleInput = sortedProducts.map((p) => {
       const sched = leveledPlansMap.get(pmKey(p))?.get(selectedYM)?.productionSchedule ?? 0;
       const cap   = p.capacityPerPallet > 0 ? p.capacityPerPallet : 1;
-      palletSchedules.set(pmKey(p), buildPalletSchedule(sched, cap, operatingDayNums));
+      return { key: pmKey(p), numPallets: sched > 0 ? Math.round(sched / cap) : 0, capPerPallet: cap };
     });
+    const palletSchedules = buildLineSchedule(lineScheduleInput, operatingDayNums);
 
     // ライン日量合計・パレット合計
     const lineDailyTotals: Record<number, number> = {};

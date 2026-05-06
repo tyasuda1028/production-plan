@@ -57,11 +57,9 @@ export function calcSimulation(state: ProductSimState): MonthResult[] {
     // 月末在庫目標数量
     const targetInventoryQty = Math.round(input.targetInventoryMonths * nextSales);
 
-    // 生産必要数をパレット単位に切り上げ（マイナスになる場合は0）
-    const requiredProduction = toPallet(Math.max(
-      0,
-      targetInventoryQty + input.salesPlan - prevInventory
-    ));
+    // 生産必要数をパレット単位に切り上げ（マイナス・ゼロは0、正値は最低1パレット保証）
+    const rawNeeded = targetInventoryQty + input.salesPlan - prevInventory;
+    const requiredProduction = rawNeeded <= 0 ? 0 : Math.max(pallet, toPallet(rawNeeded));
 
     // 月末在庫
     const monthEndInventory = prevInventory + requiredProduction - input.salesPlan;
