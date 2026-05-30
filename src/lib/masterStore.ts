@@ -1,21 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride } from './masterTypes';
-import { products as defaultProducts } from './data';
 import { createSupabaseStorage } from './supabaseStorage';
 
-// デフォルト製品マスター（data.ts から生成）
-// ※ 製品コード（code）は空欄 → ユーザーが実際のコードを入力する
-const defaultProductMasters: ProductMaster[] = defaultProducts.map((p) => ({
-  code: '',                           // 製品コード（数字コード）は未設定
-  modelCode: p.manufacturingItemCode, // 製造器種名（例: FHE-16AW1-G）
-  gasType: '',                        // ガス種（P / 12A）は未設定
-  primaryLine: p.primaryLine,
-  capacityPerPallet: 20,
-  palletType: 'P01' as const,
-  productionMethod: p.productionMethod,
-  active: true,
-}));
+// 製品マスターはデフォルトなし（各企業がマスター設定から登録）
+const defaultProductMasters: ProductMaster[] = [];
 
 // デフォルト稼働日マスター（2026年1月〜2027年12月 = 24ヶ月）
 function buildDefaultOperatingDays(): OperatingDaysMaster[] {
@@ -37,18 +26,9 @@ function buildDefaultOperatingDays(): OperatingDaysMaster[] {
   });
 }
 
-// デフォルト工場マスター
-const defaultFactoryMasters: FactoryMaster[] = [
-  { factoryNumber: "02", factoryName: "02工場", classification: "ブライツ" },
-];
-
-// デフォルトラインマスター
-const defaultLineMasters: LineMaster[] = [
-  { lineNumber: 2, lineName: "ライン2", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 540, remarks: "" },
-  { lineNumber: 3, lineName: "ライン3", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 330, remarks: "" },
-  { lineNumber: 4, lineName: "ライン4", factoryName: "02工場", classification: "ブライツ", dailyCapacity: 200, remarks: "" },
-  { lineNumber: 7, lineName: "ライン7", factoryName: "02工場", classification: "ブライツ", dailyCapacity:  90, remarks: "" },
-];
+// 工場・ラインマスターはデフォルトなし（各企業がマスター設定から登録）
+const defaultFactoryMasters: FactoryMaster[] = [];
+const defaultLineMasters: LineMaster[]       = [];
 
 interface MasterStore {
   // データ読み込み完了フラグ（Supabase からの初回ロードが終わるまで false）
