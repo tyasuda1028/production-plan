@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 
 /**
- * Supabase からの初回データロードが完了するまでローディング画面を表示する。
- * 環境変数未設定時（localStorage フォールバック）は即座に完了する。
+ * localStorage からの初回データロード（hydration）が完了するまで
+ * ローディング画面を表示する。通常は即座に完了する。
  */
 export default function HydrationGuard({ children }: { children: React.ReactNode }) {
   const hasHydrated = useMasterStore((s) => s._hasHydrated);

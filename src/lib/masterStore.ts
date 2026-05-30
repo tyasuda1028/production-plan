@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride } from './masterTypes';
-import { createSupabaseStorage } from './supabaseStorage';
+import { createLocalStorage } from './localStore';
 
 // 製品マスターはデフォルトなし（各企業がマスター設定から登録）
 const defaultProductMasters: ProductMaster[] = [];
@@ -31,7 +31,7 @@ const defaultFactoryMasters: FactoryMaster[] = [];
 const defaultLineMasters: LineMaster[]       = [];
 
 interface MasterStore {
-  // データ読み込み完了フラグ（Supabase からの初回ロードが終わるまで false）
+  // データ読み込み完了フラグ（localStorage からの初回ロードが終わるまで false）
   _hasHydrated: boolean;
   setHasHydrated: (v: boolean) => void;
 
@@ -298,7 +298,7 @@ export const useMasterStore = create<MasterStore>()(
     }),
     {
       name: 'production-plan-masters',
-      storage: createSupabaseStorage(),
+      storage: createLocalStorage(),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },

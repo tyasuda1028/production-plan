@@ -329,7 +329,7 @@ export default function SalesPlanTab() {
     displayMonths.forEach((ym) => clearSalesPlanOverride(productId, ym));
   }
 
-  // CSVインポート確定（一括でstate更新し、Supabase書き込みを1回にまとめる）
+  // CSVインポート確定（一括でstate更新し、保存書き込みを1回にまとめる）
   function handleCsvImport(rows: PreviewRow[]) {
     // CSV内の全yearMonthを収集し、最小月を planBaseMonth に自動セット
     const allYearMonths = rows.flatMap((r) => r.plans.map((p) => p.yearMonth)).filter((ym) => ym > 200000);

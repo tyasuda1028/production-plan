@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useUser, useSession } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { useMasterStore } from "@/lib/masterStore";
-import { setClerkAuth } from "@/lib/supabaseClient";
+import { setStorageUserId } from "@/lib/localStore";
 import Sidebar from "@/components/Sidebar";
 import HydrationGuard from "@/components/HydrationGuard";
 import LoginForm from "@/components/LoginForm";
@@ -42,28 +42,28 @@ function AppBody({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Clerk 認証ゲート＋Supabase ブリッジ。
+ * Clerk 認証ゲート＋localStorage ブリッジ。
  * Clerk が有効なときだけマウントされる（フックは ClerkProvider 配下が必須のため）。
  */
 function ClerkAuthShell({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn, user } = useUser();
-  const { session } = useSession();
   const prevSignedInRef = useRef(false);
 
-  // Clerk のトークン取得関数とユーザー ID を Supabase クライアントへ橋渡し
+  // Clerk のユーザー ID を localStorage アダプタへ橋渡しし、
+  // ログイン時にこのユーザーのデータを読み込む
   useEffect(() => {
-    if (isSignedIn && user && session) {
-      setClerkAuth(() => session.getToken(), user.id);
+    if (isSignedIn && user) {
+      setStorageUserId(user.id);
       if (!prevSignedInRef.current) {
-        // 初回ログイン → このユーザーのデータを Supabase から読み込み
+        // 初回ログイン → このユーザーのデータを localStorage から読み込み
         useMasterStore.persist.rehydrate?.();
         prevSignedInRef.current = true;
       }
     } else {
-      setClerkAuth(null, null);
+      setStorageUserId(null);
       prevSignedInRef.current = false;
     }
-  }, [isSignedIn, user, session]);
+  }, [isSignedIn, user]);
 
   if (!isLoaded) return <LoadingScreen />;
   if (!isSignedIn) return <LoginForm />;
