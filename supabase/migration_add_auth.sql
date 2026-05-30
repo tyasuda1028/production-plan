@@ -7,6 +7,13 @@
 ALTER TABLE app_state
   ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
 
+-- 1.5. ⚠️ 既存の共有データ行（user_id が NULL）を削除
+--      理由: 次の複合主キー (id, user_id) は NULL を許容しないため、
+--      旧デモデータ（ブライツ等）が残っているとエラーで失敗します。
+--      新規は各社がログイン後にマスター設定から登録するため削除して問題ありません。
+--      ※ 念のため事前確認: SELECT id, user_id FROM app_state WHERE user_id IS NULL;
+DELETE FROM app_state WHERE user_id IS NULL;
+
 -- 2. 旧プライマリキー（id のみ）を削除
 ALTER TABLE app_state
   DROP CONSTRAINT IF EXISTS app_state_pkey;
