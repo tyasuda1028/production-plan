@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { User } from "@supabase/supabase-js";
-import { useAuth } from "@/lib/AuthContext";
+import { useUser, useSession } from "@clerk/nextjs";
 import { useMasterStore } from "@/lib/masterStore";
-import { supabase } from "@/lib/supabaseClient";
+import { setClerkAuth } from "@/lib/supabaseClient";
 import Sidebar from "@/components/Sidebar";
 import HydrationGuard from "@/components/HydrationGuard";
 import LoginForm from "@/components/LoginForm";
+
+// Clerk 公開キーが設定されているときだけ認証を有効化する
+const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 function LoadingScreen() {
   return (
@@ -28,38 +30,7 @@ function LoadingScreen() {
   );
 }
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  const prevUserRef = useRef<User | null>(null);
-
-  // ログイン直後にこのユーザーのデータを Supabase から再読み込み
-  useEffect(() => {
-    if (!prevUserRef.current && user) {
-      // null → user に変化 = ログイン完了
-      useMasterStore.persist.rehydrate?.();
-    }
-    prevUserRef.current = user;
-  }, [user]);
-
-  // Supabase 未設定時は認証なしで動作（ローカル開発など）
-  if (!supabase) {
-    return (
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
-          <HydrationGuard>{children}</HydrationGuard>
-        </main>
-      </div>
-    );
-  }
-
-  // セッション確認中
-  if (loading) return <LoadingScreen />;
-
-  // 未ログイン → ログイン画面
-  if (!user) return <LoginForm />;
-
-  // ログイン済み → アプリ本体
+function AppBody({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
@@ -68,4 +39,39 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </main>
     </div>
   );
+}
+
+/**
+ * Clerk 認証ゲート＋Supabase ブリッジ。
+ * Clerk が有効なときだけマウントされる（フックは ClerkProvider 配下が必須のため）。
+ */
+function ClerkAuthShell({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { session } = useSession();
+  const prevSignedInRef = useRef(false);
+
+  // Clerk のトークン取得関数とユーザー ID を Supabase クライアントへ橋渡し
+  useEffect(() => {
+    if (isSignedIn && user && session) {
+      setClerkAuth(() => session.getToken(), user.id);
+      if (!prevSignedInRef.current) {
+        // 初回ログイン → このユーザーのデータを Supabase から読み込み
+        useMasterStore.persist.rehydrate?.();
+        prevSignedInRef.current = true;
+      }
+    } else {
+      setClerkAuth(null, null);
+      prevSignedInRef.current = false;
+    }
+  }, [isSignedIn, user, session]);
+
+  if (!isLoaded) return <LoadingScreen />;
+  if (!isSignedIn) return <LoginForm />;
+  return <AppBody>{children}</AppBody>;
+}
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  // Clerk 未設定時は認証なしで動作（ローカル開発など）
+  if (!clerkEnabled) return <AppBody>{children}</AppBody>;
+  return <ClerkAuthShell>{children}</ClerkAuthShell>;
 }

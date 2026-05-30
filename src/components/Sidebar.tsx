@@ -9,8 +9,10 @@ import {
 } from "lucide-react";
 import { useMasterStore } from "@/lib/masterStore";
 import { formatYearMonth, addMonths } from "@/lib/data";
-import { useAuth } from "@/lib/AuthContext";
-import { supabase } from "@/lib/supabaseClient";
+import { useUser, useClerk } from "@clerk/nextjs";
+
+// Clerk 公開キーが設定されているときだけユーザー情報・ログアウトを表示
+const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 const navItems: { href: string; label: string; icon: React.ElementType; badge?: string; divider?: boolean }[] = [
   { href: "/",          label: "ダッシュボード",   icon: LayoutDashboard },
@@ -20,10 +22,35 @@ const navItems: { href: string; label: string; icon: React.ElementType; badge?: 
   { href: "/masters",   label: "マスター設定",       icon: Settings, divider: true },
 ];
 
+function UserMenu() {
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const email = user?.primaryEmailAddress?.emailAddress ?? "";
+
+  return (
+    <div className="px-3 py-3 border-t border-gray-200">
+      <div className="flex items-center gap-2 text-xs text-gray-500 px-1 mb-2">
+        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+          <span className="text-[10px] font-bold text-blue-600">
+            {email?.[0]?.toUpperCase() ?? "?"}
+          </span>
+        </div>
+        <span className="truncate">{email}</span>
+      </div>
+      <button
+        onClick={() => signOut()}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+      >
+        <LogOut className="w-3.5 h-3.5" />
+        ログアウト
+      </button>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { planBaseMonth, setPlanBaseMonth } = useMasterStore();
-  const { user, signOut } = useAuth();
 
   function prevMonth() { setPlanBaseMonth(addMonths(planBaseMonth, -1)); }
   function nextMonth() { setPlanBaseMonth(addMonths(planBaseMonth,  1)); }
@@ -96,26 +123,8 @@ export default function Sidebar() {
         </p>
       </div>
 
-      {/* ユーザー情報・ログアウト（Supabase 認証時のみ表示） */}
-      {supabase && (
-        <div className="px-3 py-3 border-t border-gray-200">
-          <div className="flex items-center gap-2 text-xs text-gray-500 px-1 mb-2">
-            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-bold text-blue-600">
-                {user?.email?.[0]?.toUpperCase() ?? "?"}
-              </span>
-            </div>
-            <span className="truncate">{user?.email ?? ""}</span>
-          </div>
-          <button
-            onClick={() => signOut()}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            ログアウト
-          </button>
-        </div>
-      )}
+      {/* ユーザー情報・ログアウト（Clerk 認証時のみ表示） */}
+      {clerkEnabled && <UserMenu />}
     </aside>
   );
 }

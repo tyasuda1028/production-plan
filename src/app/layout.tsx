@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AuthProvider } from "@/lib/AuthContext";
+import { ClerkProvider } from "@clerk/nextjs";
 import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
@@ -8,17 +8,20 @@ export const metadata: Metadata = {
   description: "中小製造業向け 生産計画管理システム",
 };
 
+// Clerk の公開キーが設定されているときだけ認証を有効化する。
+// 未設定（ローカル開発など）の場合は ClerkProvider を挟まず認証なしで動作。
+const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const shell = <AppShell>{children}</AppShell>;
   return (
     <html lang="ja">
       <body className="bg-gray-50 text-gray-900 antialiased">
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+        {clerkEnabled ? <ClerkProvider>{shell}</ClerkProvider> : shell}
       </body>
     </html>
   );

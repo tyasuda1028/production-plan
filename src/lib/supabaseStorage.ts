@@ -1,20 +1,18 @@
 import { PersistStorage, StorageValue } from 'zustand/middleware';
-import { supabase } from './supabaseClient';
+import { supabase, getClerkUserId } from './supabaseClient';
 
 /**
- * Zustand persist 用 Supabase ストレージアダプター（マルチテナント対応版）
+ * Zustand persist 用 Supabase ストレージアダプター（Clerk マルチテナント対応版）
  *
- * - ログイン中のユーザー ID を user_id カラムに付与して読み書きする
- * - Supabase RLS（行レベルセキュリティ）と組み合わせることで他社データへのアクセスを防ぐ
- * - Supabase 未設定時は localStorage にフォールバック
+ * - 認証は Clerk。ログイン中ユーザーの Clerk ID（user_xxx 形式の文字列）を
+ *   user_id カラムに付与して読み書きする
+ * - Supabase 側は Clerk を Third-Party Auth として検証し、
+ *   RLS（auth.jwt()->>'sub' = user_id）で他社データへのアクセスを防ぐ
+ * - Supabase 未設定／未ログイン時は no-op（localStorage フォールバック）
  *
- * Supabase 側で必要なスキーマ変更（Supabase ダッシュボード > SQL エディタで実行）:
- *   ALTER TABLE app_state ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);
- *   ALTER TABLE app_state DROP CONSTRAINT IF EXISTS app_state_pkey;
- *   ALTER TABLE app_state ADD PRIMARY KEY (id, user_id);
- *   ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;
- *   CREATE POLICY "tenant_isolation" ON app_state
- *     FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+ * Supabase 側で必要なスキーマ変更は supabase/migration_clerk.sql を参照。
+ *   - user_id カラムは TEXT 型（Clerk ID は UUID ではない）
+ *   - RLS ポリシー: USING ((select auth.jwt()->>'sub') = user_id)
  */
 export function createSupabaseStorage<T>(): PersistStorage<T> {
   return {
@@ -27,15 +25,14 @@ export function createSupabaseStorage<T>(): PersistStorage<T> {
         try { return JSON.parse(raw) as StorageValue<T>; } catch { return null; }
       }
 
-      // 現在のログインユーザーを取得
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+      const userId = getClerkUserId();
+      if (!userId) return null; // 未ログイン時は読み込まない
 
       const { data, error } = await supabase
         .from('app_state')
         .select('data')
         .eq('id', name)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
       if (error) {
@@ -53,13 +50,13 @@ export function createSupabaseStorage<T>(): PersistStorage<T> {
         return;
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return; // 未ログイン時は保存しない
+      const userId = getClerkUserId();
+      if (!userId) return; // 未ログイン時は保存しない
 
       const { error } = await supabase
         .from('app_state')
         .upsert(
-          { id: name, user_id: user.id, data: value, updated_at: new Date().toISOString() },
+          { id: name, user_id: userId, data: value, updated_at: new Date().toISOString() },
           { onConflict: 'id,user_id' }
         );
 
@@ -75,14 +72,14 @@ export function createSupabaseStorage<T>(): PersistStorage<T> {
         return;
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = getClerkUserId();
+      if (!userId) return;
 
       const { error } = await supabase
         .from('app_state')
         .delete()
         .eq('id', name)
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       if (error) {
         console.error('[supabaseStorage] removeItem error:', error.message);
