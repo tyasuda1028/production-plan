@@ -67,6 +67,7 @@ interface MasterStore {
   // 在庫スナップショット
   inventorySnapshots: InventorySnapshot[];
   upsertInventory: (snap: InventorySnapshot) => void;
+  removeInventory: (yearMonth: number, productCode: string) => void;
   importInventoryCSV: (yearMonth: number, rows: { code: string; quantity: number }[]) => void;
   getInventory: (yearMonth: number) => Record<string, number>;
 
@@ -84,6 +85,9 @@ interface MasterStore {
 
   // 年別データ一括削除
   clearYearData: (year: number) => void;
+
+  // 全データ削除（このユーザーの保存データを初期状態に戻す）
+  resetAll: () => void;
 }
 
 export const useMasterStore = create<MasterStore>()(
@@ -202,6 +206,13 @@ export const useMasterStore = create<MasterStore>()(
           return { inventorySnapshots: [...filtered, snap] };
         }),
 
+      removeInventory: (yearMonth, productCode) =>
+        set((s) => ({
+          inventorySnapshots: s.inventorySnapshots.filter(
+            (i) => !(i.yearMonth === yearMonth && i.productCode === productCode)
+          ),
+        })),
+
       importInventoryCSV: (yearMonth, rows) =>
         set((s) => {
           const now = new Date().toISOString();
@@ -294,6 +305,18 @@ export const useMasterStore = create<MasterStore>()(
             simMonthOverrides:  s.simMonthOverrides.filter((o)  => notInYear(o.yearMonth)),
             operatingDays:      s.operatingDays.filter((o)      => notInYear(o.yearMonth)),
           };
+        }),
+
+      resetAll: () =>
+        set({
+          planBaseMonth: 202603,
+          factoryMasters: [],
+          lineMasters: [],
+          productMasters: [],
+          operatingDays: buildDefaultOperatingDays(),
+          inventorySnapshots: [],
+          salesPlanOverrides: [],
+          simMonthOverrides: [],
         }),
     }),
     {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Package, Calendar, Upload, Layers, TrendingUp, Building2, Trash2 } from "lucide-react";
+import { Package, Calendar, Boxes, Layers, TrendingUp, Building2, Trash2 } from "lucide-react";
 import ProductMasterTab from "@/components/masters/ProductMasterTab";
 import OperatingDaysTab from "@/components/masters/OperatingDaysTab";
 import InventoryImportTab from "@/components/masters/InventoryImportTab";
@@ -16,7 +16,7 @@ const TABS = [
   { id: "lines",          label: "ラインマスター",     icon: Layers,     desc: "ライン番号・工場・日量能力の設定" },
   { id: "sales-plan",     label: "販売計画入力",      icon: TrendingUp, desc: "品目ごとに先6ヶ月分の販売計画を入力" },
   { id: "operating-days", label: "稼働日マスター",    icon: Calendar,   desc: "月別稼働日カレンダー設定" },
-  { id: "inventory",      label: "在庫CSVインポート", icon: Upload,     desc: "月末在庫数をCSVで一括更新" },
+  { id: "inventory",      label: "在庫数入力",        icon: Boxes,      desc: "品目ごとの在庫数を入力（手入力・CSV両対応）" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];

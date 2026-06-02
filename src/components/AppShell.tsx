@@ -61,6 +61,11 @@ function ClerkAuthShell({ children }: { children: React.ReactNode }) {
       }
     } else {
       setStorageUserId(null);
+      // ログアウト時は画面上のデータをクリアし、次のユーザーへ残さない。
+      // （未ログイン時は localStore 側の書き込みガードにより保存はされない）
+      if (prevSignedInRef.current) {
+        useMasterStore.getState().resetAll();
+      }
       prevSignedInRef.current = false;
     }
   }, [isSignedIn, user]);
