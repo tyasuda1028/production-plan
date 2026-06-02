@@ -24,7 +24,7 @@ type TabId = (typeof TABS)[number]["id"];
 export default function MastersPage() {
   const [activeTab, setActiveTab] = useState<TabId>("products");
   const current = TABS.find((t) => t.id === activeTab)!;
-  const { clearYearData, salesPlanOverrides, inventorySnapshots, simMonthOverrides, operatingDays } = useMasterStore();
+  const { clearYearData, resetAll, salesPlanOverrides, inventorySnapshots, simMonthOverrides, operatingDays, productMasters, factoryMasters, lineMasters } = useMasterStore();
 
   // 登録済み年の一覧
   const registeredYears = useMemo(() => {
@@ -42,6 +42,23 @@ export default function MastersPage() {
     clearYearData(year);
   }
 
+  // 全データ削除（このユーザーの保存データを初期状態に戻す）
+  const hasAnyData =
+    productMasters.length > 0 ||
+    factoryMasters.length > 0 ||
+    lineMasters.length > 0 ||
+    salesPlanOverrides.length > 0 ||
+    inventorySnapshots.length > 0 ||
+    simMonthOverrides.length > 0;
+
+  function handleResetAll() {
+    if (!confirm(
+      "全てのデータ（製品・工場・ライン・販売計画・在庫・シミュレーション・稼働日）を削除し、初期状態に戻します。\nこの操作は取り消せません。よろしいですか？"
+    )) return;
+    if (!confirm("本当に全データを削除しますか？（最終確認）")) return;
+    resetAll();
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6 flex items-start justify-between">
@@ -49,18 +66,30 @@ export default function MastersPage() {
           <h1 className="text-xl font-bold text-gray-800">マスター設定</h1>
           <p className="text-sm text-gray-500 mt-1">{current.desc}</p>
         </div>
-        {registeredYears.length > 0 && (
+        {(registeredYears.length > 0 || hasAnyData) && (
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <span className="text-xs text-gray-400">年別データ削除：</span>
-            {registeredYears.map((year) => (
+            {registeredYears.length > 0 && (
+              <>
+                <span className="text-xs text-gray-400">年別データ削除：</span>
+                {registeredYears.map((year) => (
+                  <button
+                    key={year}
+                    onClick={() => handleClearYear(year)}
+                    className="flex items-center gap-1 text-xs border border-red-200 text-red-500 hover:bg-red-50 rounded px-2 py-1"
+                  >
+                    <Trash2 className="w-3 h-3" />{year}年
+                  </button>
+                ))}
+              </>
+            )}
+            {hasAnyData && (
               <button
-                key={year}
-                onClick={() => handleClearYear(year)}
-                className="flex items-center gap-1 text-xs border border-red-200 text-red-500 hover:bg-red-50 rounded px-2 py-1"
+                onClick={handleResetAll}
+                className="flex items-center gap-1 text-xs border border-red-300 bg-red-500 text-white hover:bg-red-600 rounded px-2.5 py-1 font-medium"
               >
-                <Trash2 className="w-3 h-3" />{year}年
+                <Trash2 className="w-3 h-3" />全データ削除
               </button>
-            ))}
+            )}
           </div>
         )}
       </div>
