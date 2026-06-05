@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride, CustomFieldDef, CustomFieldTarget } from './masterTypes';
 import { createLocalStorage } from './localStore';
+import { createSupabaseStorage } from './supabaseStorage';
+import { supabaseEnabled } from './supabaseClient';
 
 // 製品マスターはデフォルトなし（各企業がマスター設定から登録）
 const defaultProductMasters: ProductMaster[] = [];
@@ -370,7 +372,9 @@ export const useMasterStore = create<MasterStore>()(
     }),
     {
       name: 'production-plan-masters',
-      storage: createLocalStorage(),
+      // Supabase（クラウド保存・多端末同期）が有効ならそちら、
+      // 未設定なら従来どおり localStorage のみで動作
+      storage: supabaseEnabled ? createSupabaseStorage() : createLocalStorage(),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },

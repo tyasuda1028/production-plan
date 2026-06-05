@@ -21,6 +21,11 @@ export function setStorageUserId(id: string | null) {
   currentUserId = id;
 }
 
+/** 現在のユーザーID（Supabase アダプタなど他のストレージと共有） */
+export function getStorageUserId(): string | null {
+  return currentUserId;
+}
+
 function keyFor(name: string): string {
   return currentUserId ? `${name}::${currentUserId}` : name;
 }

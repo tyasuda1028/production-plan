@@ -11,9 +11,10 @@ export default function HydrationGuard({ children }: { children: React.ReactNode
   const hasHydrated = useMasterStore((s) => s._hasHydrated);
   const [timedOut, setTimedOut] = useState(false);
 
-  // 5 秒経っても応答がなければタイムアウトしてコンテンツを表示
+  // 10 秒経っても応答がなければタイムアウトしてコンテンツを表示
+  // （Supabase からの非同期ロードを考慮）
   useEffect(() => {
-    const t = setTimeout(() => setTimedOut(true), 5000);
+    const t = setTimeout(() => setTimedOut(true), 10000);
     return () => clearTimeout(t);
   }, []);
 

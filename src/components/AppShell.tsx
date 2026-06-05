@@ -55,7 +55,9 @@ function ClerkAuthShell({ children }: { children: React.ReactNode }) {
     if (isSignedIn && user) {
       setStorageUserId(user.id);
       if (!prevSignedInRef.current) {
-        // 初回ログイン → このユーザーのデータを localStorage から読み込み
+        // 初回ログイン → このユーザーのデータを読み込み（Supabase/localStorage）。
+        // Supabase は非同期取得のため、完了まで読み込み中表示にする。
+        useMasterStore.setState({ _hasHydrated: false });
         useMasterStore.persist.rehydrate?.();
         prevSignedInRef.current = true;
       }
