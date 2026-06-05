@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride } from './masterTypes';
+import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride, CustomFieldDef, CustomFieldTarget } from './masterTypes';
 import { createLocalStorage } from './localStore';
 
 // 製品マスターはデフォルトなし（各企業がマスター設定から登録）
@@ -82,6 +82,14 @@ interface MasterStore {
   setSimMonthOverride: (productId: string, yearMonth: number, field: 'salesPlan' | 'targetInventoryMonths', value: number) => void;
   setSimMonthInputs: (productId: string, inputs: Array<{yearMonth: number; salesPlan: number; targetInventoryMonths: number}>) => void;
   clearSimMonthOverrides: (productId: string) => void;
+
+  // カスタム項目（ユーザー定義のマスター項目）
+  productFields: CustomFieldDef[];
+  factoryFields: CustomFieldDef[];
+  lineFields: CustomFieldDef[];
+  addCustomField: (target: CustomFieldTarget, label: string) => void;
+  renameCustomField: (target: CustomFieldTarget, id: string, label: string) => void;
+  deleteCustomField: (target: CustomFieldTarget, id: string) => void;
 
   // 年別データ一括削除
   clearYearData: (year: number) => void;
@@ -296,6 +304,44 @@ export const useMasterStore = create<MasterStore>()(
           simMonthOverrides: s.simMonthOverrides.filter((o) => o.productId !== productId),
         })),
 
+      // ── カスタム項目 ──
+      productFields: [],
+      factoryFields: [],
+      lineFields: [],
+
+      addCustomField: (target, label) => {
+        const trimmed = label.trim();
+        if (!trimmed) return;
+        const entry: CustomFieldDef = { id: crypto.randomUUID(), label: trimmed };
+        const key = `${target}Fields` as const;
+        set((s) => ({ [key]: [...s[key], entry] }) as Partial<MasterStore>);
+      },
+
+      renameCustomField: (target, id, label) => {
+        const key = `${target}Fields` as const;
+        set((s) => ({
+          [key]: s[key].map((f) => (f.id === id ? { ...f, label } : f)),
+        }) as Partial<MasterStore>);
+      },
+
+      deleteCustomField: (target, id) => {
+        const fieldsKey = `${target}Fields` as const;
+        const recordsKey = ({ product: 'productMasters', factory: 'factoryMasters', line: 'lineMasters' } as const)[target];
+        set((s) => {
+          const strip = <T extends { custom?: Record<string, string> }>(rows: T[]): T[] =>
+            rows.map((r) => {
+              if (!r.custom || !(id in r.custom)) return r;
+              const next = { ...r.custom };
+              delete next[id];
+              return { ...r, custom: next };
+            });
+          return {
+            [fieldsKey]: s[fieldsKey].filter((f) => f.id !== id),
+            [recordsKey]: strip(s[recordsKey] as Array<{ custom?: Record<string, string> }>),
+          } as Partial<MasterStore>;
+        });
+      },
+
       clearYearData: (year) =>
         set((s) => {
           const notInYear = (ym: number) => Math.floor(ym / 100) !== year;
@@ -317,6 +363,9 @@ export const useMasterStore = create<MasterStore>()(
           inventorySnapshots: [],
           salesPlanOverrides: [],
           simMonthOverrides: [],
+          productFields: [],
+          factoryFields: [],
+          lineFields: [],
         }),
     }),
     {

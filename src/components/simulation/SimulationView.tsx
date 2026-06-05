@@ -194,7 +194,7 @@ export default function SimulationView() {
 
   // CSV出力
   function handleCsvExport() {
-    const header = ["品目コード", "製造器種名", "ライン", "項目", ...planMonths.map((m) => formatYearMonth(m))];
+    const header = ["品目コード", "品名", "ライン", "項目", ...planMonths.map((m) => formatYearMonth(m))];
     const rows: string[][] = [header];
     filtered.forEach((p) => {
       const { inputs, initialInventory } = getState(p.id);
@@ -247,7 +247,7 @@ export default function SimulationView() {
 
         <div className="flex items-center gap-2 flex-1 min-w-40 bg-white border border-gray-200 rounded px-2 py-1">
           <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <input type="text" placeholder="品目コード・製造器種名で絞り込み..." value={search}
+          <input type="text" placeholder="品目コード・品名で絞り込み..." value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full text-xs border-none outline-none bg-transparent" />
         </div>
@@ -296,7 +296,7 @@ export default function SimulationView() {
               <thead>
                 <tr className="bg-gray-50 border-b-2 border-gray-300">
                   <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2.5 text-left text-gray-600 font-semibold whitespace-nowrap border-r border-gray-200 min-w-44">
-                    製造器種名
+                    品名
                   </th>
                   <th className="sticky left-44 z-20 bg-gray-50 px-3 py-2.5 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-28">
                     項目

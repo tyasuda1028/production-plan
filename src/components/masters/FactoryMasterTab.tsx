@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { FactoryMaster } from "@/lib/masterTypes";
 import { Plus, Pencil, Trash2, Check, X, AlertTriangle } from "lucide-react";
+import CustomFieldsManager from "./CustomFieldsManager";
 
 const emptyFactory = (): FactoryMaster => ({
   factoryNumber: "",
@@ -34,7 +35,7 @@ function EditableCell({
 }
 
 export default function FactoryMasterTab() {
-  const { factoryMasters, addFactory, updateFactory, deleteFactory, lineMasters } = useMasterStore();
+  const { factoryMasters, addFactory, updateFactory, deleteFactory, lineMasters, factoryFields } = useMasterStore();
 
   const [editing, setEditing] = useState<string | null>(null);
   const [editBuf, setEditBuf] = useState<FactoryMaster>(emptyFactory());
@@ -43,6 +44,9 @@ export default function FactoryMasterTab() {
   const [adding, setAdding] = useState(false);
   const [newBuf, setNewBuf] = useState<FactoryMaster>(emptyFactory());
   const [addError, setAddError] = useState("");
+
+  const setNewCustom = (fid: string, v: string) => setNewBuf((b) => ({ ...b, custom: { ...(b.custom ?? {}), [fid]: v } }));
+  const setEditCustom = (fid: string, v: string) => setEditBuf((b) => ({ ...b, custom: { ...(b.custom ?? {}), [fid]: v } }));
 
   // 孤立ライン（工場マスターに存在しない工場名を持つライン）
   const orphanFactoryNames = useMemo(() => {
@@ -158,6 +162,9 @@ export default function FactoryMasterTab() {
         ライン本数はラインマスターの登録数から自動集計されます。
       </div>
 
+      {/* カスタム項目管理 */}
+      <CustomFieldsManager target="factory" />
+
       {/* 孤立ライン警告 */}
       {orphanFactoryNames.length > 0 && (
         <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 space-y-2">
@@ -211,6 +218,9 @@ export default function FactoryMasterTab() {
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">工場名</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">分類</th>
               <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 whitespace-nowrap">ライン本数</th>
+              {factoryFields.map((f) => (
+                <th key={f.id} className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">{f.label}</th>
+              ))}
               <th className="px-4 py-2.5 w-20" />
             </tr>
           </thead>
@@ -240,6 +250,11 @@ export default function FactoryMasterTab() {
                   />
                 </td>
                 <td />
+                {factoryFields.map((f) => (
+                  <td key={f.id} className="px-4 py-2">
+                    <EditableCell value={newBuf.custom?.[f.id] ?? ""} onChange={(v) => setNewCustom(f.id, v)} placeholder={f.label} />
+                  </td>
+                ))}
                 <td className="px-4 py-2">
                   <div className="flex gap-1 justify-end">
                     <button onClick={saveAdd} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -282,6 +297,11 @@ export default function FactoryMasterTab() {
                     {lineCountByFactory(f.factoryName)}
                     <span className="text-gray-400 ml-0.5">本</span>
                   </td>
+                  {factoryFields.map((cf) => (
+                    <td key={cf.id} className="px-4 py-2">
+                      <EditableCell value={editBuf.custom?.[cf.id] ?? ""} onChange={(v) => setEditCustom(cf.id, v)} placeholder={cf.label} />
+                    </td>
+                  ))}
                   <td className="px-4 py-2">
                     <div className="flex gap-1 justify-end">
                       <button onClick={saveEdit} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -309,6 +329,11 @@ export default function FactoryMasterTab() {
                     </span>
                     <span className="text-xs text-gray-400 ml-0.5">本</span>
                   </td>
+                  {factoryFields.map((cf) => (
+                    <td key={cf.id} className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+                      {f.custom?.[cf.id] || <span className="text-gray-300">—</span>}
+                    </td>
+                  ))}
                   <td className="px-4 py-2.5">
                     <div className="flex gap-1 justify-end">
                       <button onClick={() => startEdit(f)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">

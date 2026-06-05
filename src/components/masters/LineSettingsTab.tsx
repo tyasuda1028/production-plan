@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { LineMaster } from "@/lib/masterTypes";
 import { Pencil, Check, X, Plus, Trash2 } from "lucide-react";
+import CustomFieldsManager from "./CustomFieldsManager";
 
 function EditableCell({
   value,
@@ -41,7 +42,7 @@ const EMPTY_LINE: Omit<LineMaster, "lineNumber"> = {
 export default function LineSettingsTab() {
   const {
     lineMasters, addLineMaster, updateLineMaster, replaceLineMaster, deleteLineMaster,
-    factoryMasters,
+    factoryMasters, lineFields,
   } = useMasterStore();
 
   const [editing, setEditing] = useState<number | null>(null);
@@ -126,6 +127,7 @@ export default function LineSettingsTab() {
       lineName: newBuf.lineName.trim(),
       dailyCapacity: Number(newBuf.dailyCapacity) || 0,
       remarks: newBuf.remarks.trim(),
+      ...(newBuf.custom && Object.keys(newBuf.custom).length ? { custom: newBuf.custom } : {}),
     });
     setAdding(false);
     setNewBuf({ lineNumber: "", ...EMPTY_LINE });
@@ -145,6 +147,9 @@ export default function LineSettingsTab() {
         工場名を選択すると分類が自動補完されます。日量能力はダッシュボードの基準線に反映されます。
       </div>
 
+      {/* カスタム項目管理 */}
+      <CustomFieldsManager target="line" />
+
       {/* テーブル */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
@@ -157,6 +162,9 @@ export default function LineSettingsTab() {
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">ライン名</th>
                 <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-700 whitespace-nowrap">日量能力（台/日）</th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">備考</th>
+                {lineFields.map((f) => (
+                  <th key={f.id} className="px-4 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">{f.label}</th>
+                ))}
                 <th className="px-4 py-2.5 w-20" />
               </tr>
             </thead>
@@ -225,6 +233,15 @@ export default function LineSettingsTab() {
                         placeholder="任意"
                       />
                     </td>
+                    {lineFields.map((cf) => (
+                      <td key={cf.id} className="px-4 py-2">
+                        <EditableCell
+                          value={editBuf.custom?.[cf.id] ?? ""}
+                          onChange={(v) => setEditBuf({ ...editBuf, custom: { ...(editBuf.custom ?? {}), [cf.id]: v } })}
+                          placeholder={cf.label}
+                        />
+                      </td>
+                    ))}
                     <td className="px-4 py-2">
                       <div className="flex gap-1 justify-end">
                         <button onClick={saveEdit} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">
@@ -258,6 +275,11 @@ export default function LineSettingsTab() {
                     <td className="px-4 py-2.5 text-xs text-gray-500">
                       {l.remarks || <span className="text-gray-300">—</span>}
                     </td>
+                    {lineFields.map((cf) => (
+                      <td key={cf.id} className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+                        {l.custom?.[cf.id] || <span className="text-gray-300">—</span>}
+                      </td>
+                    ))}
                     <td className="px-4 py-2.5">
                       <div className="flex gap-1 justify-end">
                         <button
@@ -339,6 +361,15 @@ export default function LineSettingsTab() {
                       placeholder="任意"
                     />
                   </td>
+                  {lineFields.map((cf) => (
+                    <td key={cf.id} className="px-4 py-2">
+                      <EditableCell
+                        value={newBuf.custom?.[cf.id] ?? ""}
+                        onChange={(v) => setNewBuf({ ...newBuf, custom: { ...(newBuf.custom ?? {}), [cf.id]: v } })}
+                        placeholder={cf.label}
+                      />
+                    </td>
+                  ))}
                   <td className="px-4 py-2">
                     <div className="flex gap-1 justify-end">
                       <button onClick={saveAdd} className="p-1.5 bg-green-600 text-white rounded hover:bg-green-700">

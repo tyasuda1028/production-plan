@@ -1,13 +1,20 @@
+// ========== カスタム項目（ユーザー定義の表示・メモ用フィールド） ==========
+export type CustomFieldTarget = 'product' | 'factory' | 'line';
+export interface CustomFieldDef {
+  id: string;     // 安定ID（crypto.randomUUID）
+  label: string;  // 表示ラベル
+}
+
 // ========== 製品マスター ==========
 export interface ProductMaster {
   code: string;               // 製品コード（任意）
-  modelCode: string;          // 製造器種名（例: FHE-16AW1-G）
-  gasType: string;            // ガス種（P / 12A）
+  modelCode: string;          // 品名
   primaryLine: number;        // 主ライン
   capacityPerPallet: number;  // 個/パレット
   palletType: 'P01' | 'P02' | 'P03';
   productionMethod: string;   // A:主力製品 / B:在庫製品 / C:計画生産 / D:受注生産
   active: boolean;            // 有効フラグ
+  custom?: Record<string, string>; // カスタム項目の値（フィールドID→値）
 }
 
 export const PALLET_TYPES: Record<string, { name: string; size: string }> = {
@@ -22,6 +29,7 @@ export interface FactoryMaster {
   factoryName: string;    // 工場名（主キー・例: 02工場）
   classification: string; // 分類（例: ブライツ）
   // ライン本数はラインマスターから自動集計
+  custom?: Record<string, string>; // カスタム項目の値（フィールドID→値）
 }
 
 // ========== ラインマスター ==========
@@ -32,6 +40,7 @@ export interface LineMaster {
   classification: string;  // 分類（工場マスターから自動補完）
   dailyCapacity: number;   // 日量能力（台/日）
   remarks: string;         // 備考
+  custom?: Record<string, string>; // カスタム項目の値（フィールドID→値）
 }
 
 // ========== 販売計画オーバーライド ==========
@@ -64,7 +73,7 @@ export interface SimMonthOverride {
 }
 
 // ========== ユーティリティ ==========
-/** ProductMaster の一意キー（品目コード優先、なければ製造器種名） */
+/** ProductMaster の一意キー（品目コード優先、なければ品名） */
 export function pmKey(pm: ProductMaster): string {
   return pm.code || pm.modelCode;
 }

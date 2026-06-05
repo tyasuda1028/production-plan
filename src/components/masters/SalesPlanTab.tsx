@@ -9,7 +9,7 @@ import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle, Tr
 // ── CSV インポート関連型 ──
 interface PreviewRow {
   productId: string;         // pmKey(pm)
-  modelCode: string;         // 製造器種名（表示用）
+  modelCode: string;         // 品名（表示用）
   plans: { yearMonth: number; salesPlan: number }[];
   isKnown: boolean;
 }
@@ -32,7 +32,7 @@ function CsvImportSection({
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 製造器種名 → ProductMaster 逆引きマップ
+  // 品名 → ProductMaster 逆引きマップ
   const pmByModelCode = useMemo(
     () => new Map(productMasters.map((pm) => [pm.modelCode, pm])),
     [productMasters]
@@ -67,7 +67,7 @@ function CsvImportSection({
     const lines = cleaned.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length < 2) throw new Error("データが不足しています");
 
-    // ヘッダー: 品目コード, 製造器種名（参考）, 年月列...
+    // ヘッダー: 品目コード, 品名（参考）, 年月列...
     const headers = lines[0].split(",").map((s) => s.trim());
     const monthCols: { colIdx: number; ym: number }[] = [];
     for (let i = 0; i < headers.length; i++) {
@@ -83,7 +83,7 @@ function CsvImportSection({
       const col1 = cols[1] ?? "";
       if (!col0 && !col1) continue;
 
-      // 照合順: ① 品目コード(col0) → ② 製造器種名(col0) → ③ 製造器種名(col1)
+      // 照合順: ① 品目コード(col0) → ② 品名(col0) → ③ 品名(col1)
       const pm =
         (col0 ? pmByCode.get(col0) : undefined) ??
         pmByModelCode.get(col0) ??
@@ -142,7 +142,7 @@ function CsvImportSection({
 
   // テンプレートDL: 現在の入力値（オーバーライド込み）を含む
   function downloadTemplate() {
-    const header = ["品目コード", "製造器種名（参考）", ...planMonths.map(String)].join(",");
+    const header = ["品目コード", "品名（参考）", ...planMonths.map(String)].join(",");
     const rows: string[] = [];
     productMasters.forEach((pm) => {
       const id = pmKey(pm);
@@ -172,8 +172,8 @@ function CsvImportSection({
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded p-2.5 text-xs text-blue-700">
-        <strong>CSV形式：</strong> 品目コード, 製造器種名（参考）, {planMonths.map(String).join(", ")}
-        <br />品目コードで照合します。品目コードがない場合は製造器種名（参考）列で照合します。
+        <strong>CSV形式：</strong> 品目コード, 品名（参考）, {planMonths.map(String).join(", ")}
+        <br />品目コードで照合します。品目コードがない場合は品名（参考）列で照合します。
       </div>
 
       {/* テンプレートDL */}
@@ -227,7 +227,7 @@ function CsvImportSection({
             <table className="w-full text-xs border-collapse">
               <thead className="sticky top-0">
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">製造器種名</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">品名</th>
                   {preview[0]?.plans.map(({ yearMonth }) => (
                     <th key={yearMonth} className="px-3 py-2 text-right font-medium text-blue-600 whitespace-nowrap">
                       {formatYearMonth(yearMonth)}
@@ -396,7 +396,7 @@ export default function SalesPlanTab() {
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             type="text"
-            placeholder="品目コード・製造器種名で検索..."
+            placeholder="品目コード・品名で検索..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full text-sm border-none outline-none bg-transparent"
@@ -416,7 +416,7 @@ export default function SalesPlanTab() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50 z-10">品目コード</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[120px] bg-gray-50 z-10">製造器種名</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[120px] bg-gray-50 z-10">品名</th>
                 {displayMonths.map((ym) => (
                   <th key={ym} className={`px-2 py-2 text-right text-xs font-medium whitespace-nowrap min-w-[90px] ${planMonths.includes(ym) ? "text-blue-600" : "text-gray-400"}`}>
                     <div className="flex items-center justify-end gap-1">

@@ -209,7 +209,7 @@ export default function InventoryImportTab() {
         </div>
 
         <div className="bg-blue-50 border border-blue-100 rounded p-2.5 text-xs text-blue-700">
-          <strong>CSV形式（truck-loaderと共通）：</strong> 1行目ヘッダー（省略可）、2列目以降：製品コード, 在庫数
+          <strong>CSV形式：</strong> 1行目ヘッダー（省略可）、2列目以降：製品コード, 在庫数
           <br />例： <code className="bg-blue-100 px-1 rounded">1001,530</code>
         </div>
 
@@ -294,7 +294,7 @@ export default function InventoryImportTab() {
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             type="text"
-            placeholder="品目コード・製造器種名で検索..."
+            placeholder="品目コード・品名で検索..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full text-sm border-none outline-none bg-transparent"
@@ -314,7 +314,7 @@ export default function InventoryImportTab() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50 z-10">品目コード</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[120px] bg-gray-50 z-10">製造器種名</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap sticky left-[120px] bg-gray-50 z-10">品名</th>
                 {displayMonths.map((ym) => (
                   <th key={ym} className={`px-2 py-2 text-right text-xs font-medium whitespace-nowrap min-w-[90px] ${ym === prevMonth ? "text-blue-600" : "text-gray-400"}`}>
                     <div className="flex items-center justify-end gap-1">

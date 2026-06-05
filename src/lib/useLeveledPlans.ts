@@ -29,7 +29,7 @@ export function buildVirtualProduct(
     inventoryItemCode: pm.code,
     manufacturingItemCode: pm.modelCode,
     productName: pm.modelCode || pm.code,
-    gasType: pm.gasType ?? "",
+    gasType: "",
     primaryFactory: "",
     primaryLine: pm.primaryLine,
     productionMethod: pm.productionMethod,

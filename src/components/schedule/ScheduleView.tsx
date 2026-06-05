@@ -261,7 +261,7 @@ export default function ScheduleView() {
               {/* 年月ヘッダー行 */}
               <tr className="border-b border-gray-200">
                 <th className="sticky left-0 z-10 bg-gray-50 px-3 py-1.5 text-left text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-40">
-                  製造器種名
+                  品名
                 </th>
                 <th className="px-2 py-1.5 text-right text-gray-500 font-medium whitespace-nowrap border-r border-gray-200 min-w-16 bg-gray-50">
                   月計画
@@ -341,10 +341,7 @@ export default function ScheduleView() {
                         {p.code && (
                           <span className="text-[10px] text-gray-400 font-mono">{p.code}</span>
                         )}
-                        <span className="font-medium text-gray-700 font-mono">{p.modelCode}</span>
-                        {p.gasType && (
-                          <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-medium">{p.gasType}</span>
-                        )}
+                        <span className="font-medium text-gray-700">{p.modelCode}</span>
                       </div>
                       <div className="text-[10px] text-gray-400 mt-0.5">
                         {productionSchedule.toLocaleString()}台 / {cap}台×{Math.round(productionSchedule / cap)}パレット
@@ -419,7 +416,7 @@ export default function ScheduleView() {
       allRows.push([`■ ${ymStr.slice(0, 4)}年${ymStr.slice(4)}月（稼働日 ${opNums.length}日）`]);
 
       const dayHeaders = mDays.map(({ day, dow }) => `${day}(${DOW_LABELS[dow]})`);
-      allRows.push(["工場", "分類", "ライン", "製造器種名", "月計画（台）", ...dayHeaders, "合計"]);
+      allRows.push(["工場", "分類", "ライン", "品名", "月計画（台）", ...dayHeaders, "合計"]);
 
       orderedLines.forEach((lm) => {
         const lps = productMasters.filter((pm) => pm.active !== false && pm.primaryLine === lm.lineNumber);
@@ -498,7 +495,7 @@ export default function ScheduleView() {
     });
 
     const rows: string[][] = [
-      ["製品コード", "製造器種名", "ライン", ...dayCols.map((c) => c.label)],
+      ["製品コード", "品名", "ライン", ...dayCols.map((c) => c.label)],
     ];
 
     productMasters.filter((pm) => pm.active !== false).forEach((pm) => {
@@ -527,7 +524,7 @@ export default function ScheduleView() {
       <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap gap-3 items-center">
         <input
           type="text"
-          placeholder="製造器種名・品目名で検索..."
+          placeholder="品名・品目名で検索..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="text-sm border border-gray-200 rounded px-3 py-1.5 flex-1 min-w-48"
