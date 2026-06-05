@@ -7,6 +7,7 @@ import { setStorageUserId } from "@/lib/localStore";
 import Sidebar from "@/components/Sidebar";
 import HydrationGuard from "@/components/HydrationGuard";
 import LoginForm from "@/components/LoginForm";
+import SetupWizard from "@/components/SetupWizard";
 
 // Clerk 公開キーが設定されているときだけ認証を有効化する
 const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -37,6 +38,7 @@ function AppBody({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto">
         <HydrationGuard>{children}</HydrationGuard>
       </main>
+      <SetupWizard />
     </div>
   );
 }

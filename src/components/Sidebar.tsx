@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import React from "react";
 import {
   LayoutDashboard, Table2, CalendarDays, FlaskConical, Settings,
-  ChevronLeft, ChevronRight, Factory, LogOut,
+  ChevronLeft, ChevronRight, Factory, LogOut, Sparkles,
 } from "lucide-react";
 import { useMasterStore } from "@/lib/masterStore";
+import { useUiStore } from "@/lib/uiStore";
 import { formatYearMonth, addMonths } from "@/lib/data";
 import { useUser, useClerk } from "@clerk/nextjs";
 
@@ -51,6 +52,7 @@ function UserMenu() {
 export default function Sidebar() {
   const pathname = usePathname();
   const { planBaseMonth, setPlanBaseMonth } = useMasterStore();
+  const openSetup = useUiStore((s) => s.openSetup);
 
   function prevMonth() { setPlanBaseMonth(addMonths(planBaseMonth, -1)); }
   function nextMonth() { setPlanBaseMonth(addMonths(planBaseMonth,  1)); }
@@ -94,6 +96,14 @@ export default function Sidebar() {
             </React.Fragment>
           );
         })}
+
+        <button
+          onClick={openSetup}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+        >
+          <Sparkles className="w-4 h-4 shrink-0" />
+          <span className="flex-1 text-left">セットアップ</span>
+        </button>
       </nav>
 
       {/* 計画基準月セレクター */}

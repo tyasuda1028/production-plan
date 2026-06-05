@@ -4,6 +4,7 @@ import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, Fact
 import { createLocalStorage } from './localStore';
 import { createSupabaseStorage } from './supabaseStorage';
 import { supabaseEnabled } from './supabaseClient';
+import { buildSampleData } from './sampleData';
 
 // 製品マスターはデフォルトなし（各企業がマスター設定から登録）
 const defaultProductMasters: ProductMaster[] = [];
@@ -98,6 +99,11 @@ interface MasterStore {
 
   // 全データ削除（このユーザーの保存データを初期状態に戻す）
   resetAll: () => void;
+
+  // セットアップウィザード
+  setupCompleted: boolean;
+  setSetupCompleted: (v: boolean) => void;
+  seedSampleData: () => void;
 }
 
 export const useMasterStore = create<MasterStore>()(
@@ -368,6 +374,24 @@ export const useMasterStore = create<MasterStore>()(
           productFields: [],
           factoryFields: [],
           lineFields: [],
+          setupCompleted: false,
+        }),
+
+      // ── セットアップウィザード ──
+      setupCompleted: false,
+      setSetupCompleted: (v) => set({ setupCompleted: v }),
+
+      seedSampleData: () =>
+        set((s) => {
+          const sample = buildSampleData(s.planBaseMonth);
+          return {
+            factoryMasters: sample.factoryMasters,
+            lineMasters: sample.lineMasters,
+            productMasters: sample.productMasters,
+            salesPlanOverrides: sample.salesPlanOverrides,
+            inventorySnapshots: sample.inventorySnapshots,
+            setupCompleted: true,
+          };
         }),
     }),
     {
