@@ -42,9 +42,15 @@ interface MasterStore {
   planBaseMonth: number;
   setPlanBaseMonth: (ym: number) => void;
 
-  // 在庫月数目標の既定値（生産計画立案の初期値）
+  // 在庫月数目標の既定値（B/C・標準）
   defaultTargetInventoryMonths: number;
   setDefaultTargetInventoryMonths: (v: number) => void;
+  // 最小在庫月数（生産方式A用）
+  minTargetInventoryMonths: number;
+  setMinTargetInventoryMonths: (v: number) => void;
+  // 生産間隔（月）（生産方式C・定期まとめ生産用）
+  productionCycleMonths: number;
+  setProductionCycleMonths: (v: number) => void;
 
   // 工場マスター
   factoryMasters: FactoryMaster[];
@@ -121,9 +127,13 @@ export const useMasterStore = create<MasterStore>()(
       planBaseMonth: 202603,
       setPlanBaseMonth: (ym: number) => set({ planBaseMonth: ym }),
 
-      // ── 在庫月数目標の既定値 ──
+      // ── 在庫月数目標の既定値・方式別パラメータ ──
       defaultTargetInventoryMonths: 1.5,
       setDefaultTargetInventoryMonths: (v: number) => set({ defaultTargetInventoryMonths: v }),
+      minTargetInventoryMonths: 0.5,
+      setMinTargetInventoryMonths: (v: number) => set({ minTargetInventoryMonths: v }),
+      productionCycleMonths: 2,
+      setProductionCycleMonths: (v: number) => set({ productionCycleMonths: v }),
 
       // ── 工場マスター ──
       factoryMasters: defaultFactoryMasters,
@@ -373,6 +383,8 @@ export const useMasterStore = create<MasterStore>()(
         set({
           planBaseMonth: 202603,
           defaultTargetInventoryMonths: 1.5,
+          minTargetInventoryMonths: 0.5,
+          productionCycleMonths: 2,
           factoryMasters: [],
           lineMasters: [],
           productMasters: [],

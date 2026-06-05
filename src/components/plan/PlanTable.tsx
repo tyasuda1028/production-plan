@@ -3,8 +3,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { getPlanMonths, formatYearMonth } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
-import { MonthlyPlan, Product } from "@/lib/types";
+import { Product } from "@/lib/types";
 import { useLeveledPlans, LeveledPlan, useVirtualProducts } from "@/lib/useLeveledPlans";
+import { PRODUCTION_METHODS, methodDef, methodLetter } from "@/lib/productionMethods";
 import { ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 
 type ExpandedRows = Record<string, boolean>;
@@ -19,13 +20,6 @@ function InvMonthsCell({ value }: { value: number }) {
   const color = value < 1.0 ? "text-red-600" : value > 2.5 ? "text-amber-600" : "text-green-600";
   return <span className={`font-medium ${color}`}>{value.toFixed(1)}</span>;
 }
-
-const METHOD_COLORS: Record<string, string> = {
-  "A:主力製品": "bg-green-50 text-green-700",
-  "B:在庫製品": "bg-blue-50 text-blue-700",
-  "C:計画生産": "bg-amber-50 text-amber-700",
-  "D:受注生産": "bg-purple-50 text-purple-700",
-};
 
 export default function PlanTable() {
   const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
@@ -56,8 +50,6 @@ export default function PlanTable() {
   const lineMap = useMemo(() =>
     new Map(lineMasters.map((l) => [l.lineNumber, l])), [lineMasters]);
 
-  const methods = ["all", "B:在庫製品", "D:受注生産"];
-
   const filtered = useMemo(() => {
     return virtualProducts.filter((p) => {
       const q = search.toLowerCase();
@@ -70,7 +62,7 @@ export default function PlanTable() {
       const matchClass   = filterClassification === "all" || lm?.classification === filterClassification;
       const matchFactory = filterFactory === "all"        || lm?.factoryName === filterFactory;
       const matchLine    = filterLineName === "all"       || lm?.lineName === filterLineName;
-      const matchMethod  = filterMethod === "all"         || p.productionMethod === filterMethod;
+      const matchMethod  = filterMethod === "all"         || methodLetter(p.productionMethod) === filterMethod;
 
       return matchSearch && matchClass && matchFactory && matchLine && matchMethod;
     });
@@ -136,7 +128,7 @@ export default function PlanTable() {
           <select value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}
             className="text-sm border border-gray-200 rounded px-2 py-1.5 bg-white">
             <option value="all">全生産方式</option>
-            {methods.slice(1).map((m) => <option key={m} value={m}>{m}</option>)}
+            {PRODUCTION_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
           </select>
         </div>
         <div className="flex items-center gap-2 ml-auto">
@@ -198,8 +190,8 @@ export default function PlanTable() {
                         {p.comment && <div className="text-xs text-amber-600 mt-0.5">{p.comment}</div>}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${METHOD_COLORS[p.productionMethod] ?? "bg-gray-100 text-gray-600"}`}>
-                          {p.productionMethod.split(":")[0]}
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${methodDef(p.productionMethod).color}`}>
+                          {methodLetter(p.productionMethod)}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right text-xs">{p.totalInventory.toLocaleString()}</td>

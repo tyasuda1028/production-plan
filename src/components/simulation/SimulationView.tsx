@@ -5,6 +5,7 @@ import { formatYearMonth, addMonths, getPlanMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { useVirtualProducts } from "@/lib/useLeveledPlans";
 import { calcSimulation, buildDefaultInputs, MonthInput } from "@/lib/simulation";
+import { targetMonthsForMethod } from "@/lib/productionMethods";
 import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Download } from "lucide-react";
 
 // 在庫月数の色分け
@@ -65,7 +66,7 @@ type ProductState = { inputs: MonthInput[]; initialInventory: number };
 
 export default function SimulationView() {
   const { planBaseMonth, setPlanBaseMonth, lineMasters, simMonthOverrides, setSimMonthInputs, salesPlanOverrides,
-    defaultTargetInventoryMonths, setDefaultTargetInventoryMonths } = useMasterStore();
+    defaultTargetInventoryMonths, setDefaultTargetInventoryMonths, minTargetInventoryMonths } = useMasterStore();
   const [search, setSearch] = useState("");
   const [filterFactory, setFilterFactory] = useState("all");
   const [filterLine, setFilterLine] = useState("all");
@@ -139,7 +140,7 @@ export default function SimulationView() {
           : buildDefaultInputs(planBaseMonth, planMonths.map((ym) => {
               const ov = salesPlanOverrides.find((o) => o.productId === p.id && o.yearMonth === ym);
               return ov?.salesPlan ?? 0;
-            }), defaultTargetMonths);
+            }), targetMonthsForMethod(p.productionMethod, defaultTargetMonths, minTargetInventoryMonths));
         next.set(p.id, { inputs, initialInventory: p.lastMonthInventory });
       });
       return next;
@@ -185,14 +186,14 @@ export default function SimulationView() {
     const inputs = buildDefaultInputs(planBaseMonth, planMonths.map((ym) => {
       const ov = salesPlanOverrides.find((o) => o.productId === id && o.yearMonth === ym);
       return ov?.salesPlan ?? 0;
-    }), defaultTargetMonths);
+    }), targetMonthsForMethod(product.productionMethod, defaultTargetMonths, minTargetInventoryMonths));
     setStates((prev) => {
       const next = new Map(prev);
       next.set(id, { inputs, initialInventory: product.lastMonthInventory });
       setSimMonthInputs(id, inputs);
       return next;
     });
-  }, [planBaseMonth, planMonths, defaultTargetMonths, salesPlanOverrides, setSimMonthInputs]);
+  }, [planBaseMonth, planMonths, defaultTargetMonths, minTargetInventoryMonths, salesPlanOverrides, setSimMonthInputs]);
 
   // CSV出力
   function handleCsvExport() {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMasterStore } from "@/lib/masterStore";
 import { useUiStore } from "@/lib/uiStore";
 import { PALLET_TYPES, ProductMaster, FactoryMaster } from "@/lib/masterTypes";
+import { METHOD_LABELS } from "@/lib/productionMethods";
 import { addMonths, formatYearMonth } from "@/lib/data";
 import {
   X, ChevronRight, ChevronLeft, Sparkles, Check, Plus,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
-const METHOD_OPTIONS = ["A:主力製品", "B:在庫製品", "C:計画生産", "D:受注生産"];
+const METHOD_OPTIONS = METHOD_LABELS;
 const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => addMonths(202601, i));
 
 // ステップ: 0=開始方法 / 1=計画基準月 / 2=工場 / 3=ライン / 4=製品 / 5=完了
@@ -30,6 +31,10 @@ export default function SetupWizard() {
   const setPlanBaseMonth = useMasterStore((s) => s.setPlanBaseMonth);
   const targetMonths   = useMasterStore((s) => s.defaultTargetInventoryMonths);
   const setTargetMonths = useMasterStore((s) => s.setDefaultTargetInventoryMonths);
+  const minMonths      = useMasterStore((s) => s.minTargetInventoryMonths);
+  const setMinMonths   = useMasterStore((s) => s.setMinTargetInventoryMonths);
+  const cycleMonths    = useMasterStore((s) => s.productionCycleMonths);
+  const setCycleMonths = useMasterStore((s) => s.setProductionCycleMonths);
   const addFactory     = useMasterStore((s) => s.addFactory);
   const addLineMaster  = useMasterStore((s) => s.addLineMaster);
   const addProduct     = useMasterStore((s) => s.addProduct);
@@ -107,7 +112,11 @@ export default function SetupWizard() {
             <StepBaseMonth planBaseMonth={planBaseMonth} setPlanBaseMonth={setPlanBaseMonth} />
           )}
           {step === 2 && (
-            <StepTargetMonths value={targetMonths} setValue={setTargetMonths} />
+            <StepTargetMonths
+              value={targetMonths} setValue={setTargetMonths}
+              min={minMonths} setMin={setMinMonths}
+              cycle={cycleMonths} setCycle={setCycleMonths}
+            />
           )}
           {step === 3 && (
             <StepFactory factoryMasters={factoryMasters} addFactory={addFactory} />
@@ -206,22 +215,53 @@ function StepBaseMonth({ planBaseMonth, setPlanBaseMonth }: {
   );
 }
 
-// ── ステップ: 在庫月数目標 ──
-function StepTargetMonths({ value, setValue }: { value: number; setValue: (v: number) => void }) {
+// ── ステップ: 在庫月数目標・方式別パラメータ ──
+function StepTargetMonths({ value, setValue, min, setMin, cycle, setCycle }: {
+  value: number; setValue: (v: number) => void;
+  min: number; setMin: (v: number) => void;
+  cycle: number; setCycle: (v: number) => void;
+}) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2"><Boxes className="w-4 h-4 text-blue-500" /><h2 className="font-semibold text-gray-800 text-sm">在庫月数目標（初期値）</h2></div>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2"><Boxes className="w-4 h-4 text-blue-500" /><h2 className="font-semibold text-gray-800 text-sm">在庫の持ち方（生産方式別）</h2></div>
       <p className="text-xs text-gray-500">
-        翌月の販売計画の<strong>何ヶ月分</strong>を在庫として持つかの目安です。「生産計画立案」での生産必要数の計算（目標在庫＝在庫月数目標×翌月販売）の初期値に使われます。あとで変更できます。
+        製品ごとに選ぶ<strong>生産方式（A〜D）</strong>で在庫の持ち方が変わります。ここでその基準値を決めます（あとで変更可）。
       </p>
-      <div className="flex items-center gap-3 pt-1">
-        <input type="range" min={0.5} max={4} step={0.25} value={value}
-          onChange={(e) => setValue(Number(e.target.value))} className="w-56" />
-        <span className="text-lg font-bold text-indigo-700 w-20">
-          {value.toFixed(2)}<span className="text-xs text-gray-400 ml-1">ヶ月</span>
-        </span>
+
+      {/* 標準（B/C） */}
+      <div className="space-y-1.5">
+        <div className="text-xs font-medium text-gray-700">標準の在庫月数目標（B:在庫保有 / C:計画生産）</div>
+        <div className="flex items-center gap-3">
+          <input type="range" min={0.5} max={4} step={0.25} value={value}
+            onChange={(e) => setValue(Number(e.target.value))} className="w-48" />
+          <span className="text-base font-bold text-indigo-700 w-20">{value.toFixed(2)}<span className="text-xs text-gray-400 ml-1">ヶ月</span></span>
+        </div>
+        <p className="text-[11px] text-gray-400">翌月販売の何ヶ月分を在庫として持つか（目標在庫＝在庫月数×翌月販売）。</p>
       </div>
-      <p className="text-xs text-gray-400">目安：1.0ヶ月＝最小限 ／ 1.5ヶ月＝標準 ／ 2.0ヶ月以上＝余裕を持つ</p>
+
+      {/* 最小（A） */}
+      <div className="space-y-1.5">
+        <div className="text-xs font-medium text-gray-700">最小在庫月数（A:最小在庫・高回転）</div>
+        <div className="flex items-center gap-3">
+          <input type="range" min={0} max={2} step={0.25} value={min}
+            onChange={(e) => setMin(Number(e.target.value))} className="w-48" />
+          <span className="text-base font-bold text-green-700 w-20">{min.toFixed(2)}<span className="text-xs text-gray-400 ml-1">ヶ月</span></span>
+        </div>
+        <p className="text-[11px] text-gray-400">高回転で在庫を薄く持つ製品の在庫水準。</p>
+      </div>
+
+      {/* 生産間隔（C） */}
+      <div className="space-y-1.5">
+        <div className="text-xs font-medium text-gray-700">生産間隔（C:計画生産・定期まとめ生産）</div>
+        <div className="flex items-center gap-3">
+          <input type="range" min={1} max={6} step={1} value={cycle}
+            onChange={(e) => setCycle(Number(e.target.value))} className="w-48" />
+          <span className="text-base font-bold text-amber-700 w-20">{cycle}<span className="text-xs text-gray-400 ml-1">ヶ月ごと</span></span>
+        </div>
+        <p className="text-[11px] text-gray-400">この間隔でまとめて生産し、間は在庫を取り崩します。</p>
+      </div>
+
+      <p className="text-[11px] text-gray-400 border-t border-gray-100 pt-2">D:受注生産 は在庫を持たず「生産＝販売」です（設定不要）。</p>
     </div>
   );
 }

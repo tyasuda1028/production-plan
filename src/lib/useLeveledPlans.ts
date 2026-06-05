@@ -3,6 +3,14 @@ import { useMasterStore } from "./masterStore";
 import { getPlanMonths, addMonths } from "./data";
 import { Product, MonthlyPlan } from "./types";
 import { ProductMaster, pmKey } from "./masterTypes";
+import { methodLetter, targetMonthsForMethod } from "./productionMethods";
+
+/** 方式別の在庫・生産パラメータ */
+export interface PlanPolicy {
+  standardMonths: number; // B/C の在庫月数目標（標準）
+  minMonths: number;      // A の最小在庫月数
+  cycleMonths: number;    // C の生産間隔（月）
+}
 
 export type LeveledPlan = MonthlyPlan & { dailyQuantity: number };
 
@@ -92,84 +100,103 @@ export function buildLeveledPlanForProduct(
   planMonths: number[],
   opDaysCount: Map<number, number>,
   overrideMap: Map<string, number>,
-  simInputsMap?: Map<string, Map<number, { salesPlan: number; targetInventoryMonths: number }>>
+  simInputsMap: Map<string, Map<number, { salesPlan: number; targetInventoryMonths: number }>> | undefined,
+  policy: PlanPolicy
 ): Map<number, LeveledPlan> {
-  // 販売計画オーバーライドを適用したベース計画
-  let basePlans: MonthlyPlan[] = planMonths.map((ym) => {
-    const mp = p.monthlyPlans.find((m) => m.yearMonth === ym) ?? {
-      yearMonth: ym,
-      salesPlan: 0,
-      targetInventoryMonths: 1.5,
-      productionSchedule: 0,
-      requiredProduction: 0,
-      surplusDeficit: 0,
-      planAdjustment: 0,
-      monthEndInventory: 0,
-      monthEndInventoryMonths: 0,
-    };
-    const override = overrideMap.get(`${p.id}:${ym}`);
-    if (override !== undefined) {
-      const salesPlan = override;
-      const requiredProduction = Math.round(salesPlan * 1.05);
-      return { ...mp, salesPlan, requiredProduction };
-    }
-    return mp;
-  });
-
+  const n = planMonths.length;
+  const letter = methodLetter(p.productionMethod);
+  const pallet = (p.capacityPerPallet ?? 1) > 0 ? (p.capacityPerPallet ?? 1) : 1;
+  const toPallet = (qty: number) => Math.ceil(qty / pallet) * pallet;
+  const opDays = planMonths.map((ym) => opDaysCount.get(ym) ?? DEFAULT_OP_DAYS);
   const simForProduct = simInputsMap?.get(p.id);
-  if (simForProduct && simForProduct.size > 0) {
-    let prevInvChain = p.lastMonthInventory;
-    basePlans = basePlans.map((mp, i) => {
-      const si = simForProduct.get(mp.yearMonth);
-      if (!si) {
-        prevInvChain = prevInvChain + mp.requiredProduction - mp.salesPlan;
-        return mp;
+
+  // ── 各月の販売計画（sim販売 ＞ salesPlanオーバーライド ＞ monthlyPlan） ──
+  const sales = planMonths.map((ym) => {
+    const sim = simForProduct?.get(ym);
+    if (sim) return sim.salesPlan;
+    const ov = overrideMap.get(`${p.id}:${ym}`);
+    if (ov !== undefined) return ov;
+    return p.monthlyPlans.find((m) => m.yearMonth === ym)?.salesPlan ?? 0;
+  });
+  // 翌月販売（最終月は7ヶ月目があれば使用、無ければ当月で代用）
+  const nextSales = planMonths.map((_, i) =>
+    i + 1 < n
+      ? sales[i + 1]
+      : (p.monthlyPlans.find((m) => m.yearMonth > planMonths[n - 1])?.salesPlan ?? sales[i])
+  );
+  // 各月の在庫月数目標（simオーバーライド ＞ 方式別既定）
+  const targetMonthsAt = (i: number): number => {
+    const sim = simForProduct?.get(planMonths[i]);
+    if (sim) return sim.targetInventoryMonths;
+    return targetMonthsForMethod(p.productionMethod, policy.standardMonths, policy.minMonths);
+  };
+
+  // ── 1) 生産必要数（目標）を方式別に算出。prevInv を「必要分だけ生産」で連鎖 ──
+  const required: number[] = new Array(n).fill(0);
+  const cycle = Math.max(1, Math.round(policy.cycleMonths));
+  {
+    let prevInv = p.lastMonthInventory;
+    for (let i = 0; i < n; i++) {
+      let need = 0;
+      if (letter === "C") {
+        // 定期まとめ生産：生産月だけ、次サイクルまでの販売＋目標バッファをまとめて
+        if (i % cycle === 0) {
+          const end = Math.min(i + cycle, n);
+          const coverSum = sales.slice(i, end).reduce((s, v) => s + v, 0);
+          const cycleEndNext = end < n ? sales[end] : nextSales[n - 1];
+          const buffer = Math.round(targetMonthsAt(i) * cycleEndNext);
+          need = Math.max(0, coverSum + buffer - prevInv);
+        }
+      } else if (letter === "D") {
+        // 受注・在庫なし：販売分だけ（前月末在庫があれば取り崩し）
+        need = Math.max(0, sales[i] - prevInv);
+      } else {
+        // A / B：在庫月数目標を満たす
+        const targetQty = Math.round(targetMonthsAt(i) * nextSales[i]);
+        need = Math.max(0, targetQty + sales[i] - prevInv);
       }
-      const nextSalesPlan =
-        i + 1 < basePlans.length
-          ? (simForProduct.get(basePlans[i + 1].yearMonth)?.salesPlan ?? basePlans[i + 1].salesPlan)
-          : p.monthlyPlans.find((m) => m.yearMonth > mp.yearMonth)?.salesPlan ?? 0;
-      const targetInventoryQty = Math.round(si.targetInventoryMonths * nextSalesPlan);
-      const requiredProduction = Math.max(0, targetInventoryQty + si.salesPlan - prevInvChain);
-      prevInvChain = prevInvChain + requiredProduction - si.salesPlan;
-      return { ...mp, salesPlan: si.salesPlan, requiredProduction };
-    });
+      required[i] = need;
+      prevInv = prevInv + need - sales[i];
+    }
   }
 
-  const opDays = planMonths.map((ym) => opDaysCount.get(ym) ?? DEFAULT_OP_DAYS);
+  // ── 2) 実生産量。A/Bは3ヶ月ローリング平均で平準化、C/Dは平準化せず必要分 ──
+  let production: number[];
+  if (letter === "A" || letter === "B") {
+    const rates = required.map((_, i) => {
+      const end = Math.min(i + 3, n);
+      const reqSum = required.slice(i, end).reduce((s, v) => s + v, 0);
+      const daySum = opDays.slice(i, end).reduce((s, d) => s + d, 0);
+      return daySum > 0 ? reqSum / daySum : 0;
+    });
+    production = required.map((req, i) => {
+      const rounded = Math.round(rates[i] * opDays[i]);
+      // 必要生産がある場合は最低1パレット保証
+      return rounded === 0 && req > 0 ? pallet : toPallet(rounded);
+    });
+  } else {
+    production = required.map((req) => (req <= 0 ? 0 : Math.max(pallet, toPallet(req))));
+  }
 
-  // 3ヶ月ローリング平均レート：当月から3ヶ月分の必要生産量÷稼働日数
-  // 月ごとに「当月〜翌2ヶ月」の平均日量を目標にすることで滑らかな生産計画を実現
-  const rates = basePlans.map((_, i) => {
-    const end    = Math.min(i + 3, basePlans.length);
-    const reqSum = basePlans.slice(i, end).reduce((s, m) => s + m.requiredProduction, 0);
-    const daySum = opDays.slice(i, end).reduce((s, d) => s + d, 0);
-    return daySum > 0 ? reqSum / daySum : 0;
-  });
-
-  const pallet = (p.capacityPerPallet ?? 1) > 0 ? (p.capacityPerPallet ?? 1) : 1;
-  // パレット単位切り上げヘルパー
-  const toPallet = (qty: number) => Math.ceil(qty / pallet) * pallet;
-
+  // ── 3) 月末在庫・在庫月数・日量を連鎖算出 ──
   const result = new Map<number, LeveledPlan>();
   let prevInv = p.lastMonthInventory;
-
-  basePlans.forEach((mp, i) => {
-    // 生産数をパレット単位に切り上げ。必要生産がある場合は最低1パレット保証
-    const roundedQty = Math.round(rates[i] * opDays[i]);
-    const productionSchedule = roundedQty === 0 && mp.requiredProduction > 0
-      ? pallet
-      : toPallet(roundedQty);
-    const surplusDeficit          = productionSchedule - mp.requiredProduction;
-    const planAdjustment          = surplusDeficit < 0 ? Math.abs(surplusDeficit) : 0;
-    const monthEndInventory       = prevInv + productionSchedule - mp.salesPlan;
+  planMonths.forEach((ym, i) => {
+    const productionSchedule = production[i];
+    const salesPlan = sales[i];
+    const surplusDeficit = productionSchedule - required[i];
+    const planAdjustment = surplusDeficit < 0 ? Math.abs(surplusDeficit) : 0;
+    const monthEndInventory = prevInv + productionSchedule - salesPlan;
     const monthEndInventoryMonths =
-      mp.salesPlan > 0 ? parseFloat((monthEndInventory / mp.salesPlan).toFixed(1)) : 0;
+      salesPlan > 0 ? parseFloat((monthEndInventory / salesPlan).toFixed(1)) : 0;
     const dailyQuantity = opDays[i] > 0 ? Math.round(productionSchedule / opDays[i]) : 0;
 
-    result.set(mp.yearMonth, {
-      ...mp,
+    result.set(ym, {
+      yearMonth: ym,
+      salesPlan,
+      targetInventoryMonths: targetMonthsAt(i),
       productionSchedule,
+      requiredProduction: required[i],
       surplusDeficit,
       planAdjustment,
       monthEndInventory,
@@ -195,6 +222,9 @@ export function useLeveledPlans(): Map<string, Map<number, LeveledPlan>> {
   const simMonthOverrides   = useMasterStore((s) => s.simMonthOverrides);
   const productMasters      = useMasterStore((s) => s.productMasters);
   const inventorySnapshots  = useMasterStore((s) => s.inventorySnapshots);
+  const standardMonths      = useMasterStore((s) => s.defaultTargetInventoryMonths);
+  const minMonths           = useMasterStore((s) => s.minTargetInventoryMonths);
+  const cycleMonths         = useMasterStore((s) => s.productionCycleMonths);
 
   const planMonths = useMemo(() => getPlanMonths(planBaseMonth), [planBaseMonth]);
   const prevMonth  = useMemo(() => addMonths(planBaseMonth, -1), [planBaseMonth]);
@@ -230,8 +260,8 @@ export function useLeveledPlans(): Map<string, Map<number, LeveledPlan>> {
         (s) => s.yearMonth === prevMonth && s.productCode === key
       );
       const vp = buildVirtualProduct(pm, snap?.quantity ?? 0, planMonths);
-      result.set(key, buildLeveledPlanForProduct(vp, planMonths, opDaysCount, overrideMap, simInputsMap));
+      result.set(key, buildLeveledPlanForProduct(vp, planMonths, opDaysCount, overrideMap, simInputsMap, { standardMonths, minMonths, cycleMonths }));
     });
     return result;
-  }, [planMonths, prevMonth, productMasters, inventorySnapshots, opDaysCount, overrideMap, simInputsMap]);
+  }, [planMonths, prevMonth, productMasters, inventorySnapshots, opDaysCount, overrideMap, simInputsMap, standardMonths, minMonths, cycleMonths]);
 }

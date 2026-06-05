@@ -3,24 +3,12 @@
 import { useState } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { ProductMaster, LineMaster, PALLET_TYPES, CustomFieldDef } from "@/lib/masterTypes";
+import { METHOD_LABELS, normalizeMethod, methodDef } from "@/lib/productionMethods";
 import { Plus, Pencil, Trash2, Upload, Download, Check, X } from "lucide-react";
 import CustomFieldsManager from "./CustomFieldsManager";
 
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
-const METHOD_OPTIONS = ["A:主力製品", "B:在庫製品", "C:計画生産", "D:受注生産"];
-
-// 生産方式の正規化（"B" や文字化け → "B:在庫製品" など）
-const METHOD_PREFIX_MAP: Record<string, string> = {
-  A: "A:主力製品",
-  B: "B:在庫製品",
-  C: "C:計画生産",
-  D: "D:受注生産",
-};
-function normalizeMethod(m: string): string {
-  if (METHOD_OPTIONS.includes(m)) return m;           // 既に正しい形式
-  const key = (m ?? "").charAt(0).toUpperCase();
-  return METHOD_PREFIX_MAP[key] ?? "B:在庫製品";       // 先頭文字で判定、不明は B
-}
+const METHOD_OPTIONS = METHOD_LABELS;
 
 const emptyProduct = (): ProductMaster => ({
   code: "",
@@ -28,7 +16,7 @@ const emptyProduct = (): ProductMaster => ({
   primaryLine: 2,
   capacityPerPallet: 20,
   palletType: "P01",
-  productionMethod: "B:在庫製品",
+  productionMethod: normalizeMethod("B"),
   active: true,
 });
 
@@ -126,6 +114,7 @@ function ProductEditRow({
       </td>
       <td className="px-3 py-2">
         <select value={buf.productionMethod} onChange={(e) => setBuf({ ...buf, productionMethod: e.target.value })}
+          title={methodDef(buf.productionMethod).desc}
           className="text-xs border border-blue-300 rounded px-1.5 py-1 bg-white w-full">
           {METHOD_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
