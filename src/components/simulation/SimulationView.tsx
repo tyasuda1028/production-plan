@@ -64,11 +64,13 @@ function StepCell({
 type ProductState = { inputs: MonthInput[]; initialInventory: number };
 
 export default function SimulationView() {
-  const { planBaseMonth, setPlanBaseMonth, lineMasters, simMonthOverrides, setSimMonthInputs, salesPlanOverrides } = useMasterStore();
+  const { planBaseMonth, setPlanBaseMonth, lineMasters, simMonthOverrides, setSimMonthInputs, salesPlanOverrides,
+    defaultTargetInventoryMonths, setDefaultTargetInventoryMonths } = useMasterStore();
   const [search, setSearch] = useState("");
   const [filterFactory, setFilterFactory] = useState("all");
   const [filterLine, setFilterLine] = useState("all");
-  const [defaultTargetMonths, setDefaultTargetMonths] = useState(1.5);
+  // 在庫月数目標の既定値は永続設定（ストア）から
+  const defaultTargetMonths = defaultTargetInventoryMonths;
 
   const planMonths = useMemo(() => getPlanMonths(planBaseMonth), [planBaseMonth]);
   const virtualProducts = useVirtualProducts();
@@ -272,7 +274,7 @@ export default function SimulationView() {
           <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400" />
           <span className="text-xs text-gray-500 whitespace-nowrap">初期在庫月数目標:</span>
           <input type="range" min={0.5} max={4} step={0.5} value={defaultTargetMonths}
-            onChange={(e) => setDefaultTargetMonths(Number(e.target.value))} className="w-20" />
+            onChange={(e) => setDefaultTargetInventoryMonths(Number(e.target.value))} className="w-20" />
           <span className="text-xs font-semibold text-indigo-700 w-8">{defaultTargetMonths.toFixed(1)}</span>
         </div>
 

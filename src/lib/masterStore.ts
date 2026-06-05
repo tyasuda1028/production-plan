@@ -42,6 +42,10 @@ interface MasterStore {
   planBaseMonth: number;
   setPlanBaseMonth: (ym: number) => void;
 
+  // 在庫月数目標の既定値（生産計画立案の初期値）
+  defaultTargetInventoryMonths: number;
+  setDefaultTargetInventoryMonths: (v: number) => void;
+
   // 工場マスター
   factoryMasters: FactoryMaster[];
   addFactory: (f: FactoryMaster) => void;
@@ -116,6 +120,10 @@ export const useMasterStore = create<MasterStore>()(
       // ── 計画基準月 ──
       planBaseMonth: 202603,
       setPlanBaseMonth: (ym: number) => set({ planBaseMonth: ym }),
+
+      // ── 在庫月数目標の既定値 ──
+      defaultTargetInventoryMonths: 1.5,
+      setDefaultTargetInventoryMonths: (v: number) => set({ defaultTargetInventoryMonths: v }),
 
       // ── 工場マスター ──
       factoryMasters: defaultFactoryMasters,
@@ -295,7 +303,7 @@ export const useMasterStore = create<MasterStore>()(
           return {
             simMonthOverrides: [
               ...s.simMonthOverrides,
-              { productId, yearMonth, salesPlan: 0, targetInventoryMonths: 1.5, [field]: value },
+              { productId, yearMonth, salesPlan: 0, targetInventoryMonths: get().defaultTargetInventoryMonths, [field]: value },
             ],
           };
         }),
@@ -364,6 +372,7 @@ export const useMasterStore = create<MasterStore>()(
       resetAll: () =>
         set({
           planBaseMonth: 202603,
+          defaultTargetInventoryMonths: 1.5,
           factoryMasters: [],
           lineMasters: [],
           productMasters: [],

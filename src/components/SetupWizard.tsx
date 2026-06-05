@@ -8,7 +8,7 @@ import { PALLET_TYPES, ProductMaster, FactoryMaster } from "@/lib/masterTypes";
 import { addMonths, formatYearMonth } from "@/lib/data";
 import {
   X, ChevronRight, ChevronLeft, Sparkles, Check, Plus,
-  Building2, Layers, Package, CalendarDays, Rocket,
+  Building2, Layers, Package, CalendarDays, Rocket, Boxes,
 } from "lucide-react";
 
 const PALLET_OPTIONS = ["P01", "P02", "P03"] as const;
@@ -16,7 +16,7 @@ const METHOD_OPTIONS = ["A:主力製品", "B:在庫製品", "C:計画生産", "D
 const MONTH_OPTIONS = Array.from({ length: 24 }, (_, i) => addMonths(202601, i));
 
 // ステップ: 0=開始方法 / 1=計画基準月 / 2=工場 / 3=ライン / 4=製品 / 5=完了
-const STEP_LABELS = ["開始", "基準月", "工場", "ライン", "製品", "完了"];
+const STEP_LABELS = ["開始", "基準月", "在庫月数", "工場", "ライン", "製品", "完了"];
 
 export default function SetupWizard() {
   const router = useRouter();
@@ -28,6 +28,8 @@ export default function SetupWizard() {
   const productMasters = useMasterStore((s) => s.productMasters);
   const planBaseMonth  = useMasterStore((s) => s.planBaseMonth);
   const setPlanBaseMonth = useMasterStore((s) => s.setPlanBaseMonth);
+  const targetMonths   = useMasterStore((s) => s.defaultTargetInventoryMonths);
+  const setTargetMonths = useMasterStore((s) => s.setDefaultTargetInventoryMonths);
   const addFactory     = useMasterStore((s) => s.addFactory);
   const addLineMaster  = useMasterStore((s) => s.addLineMaster);
   const addProduct     = useMasterStore((s) => s.addProduct);
@@ -97,7 +99,7 @@ export default function SetupWizard() {
               onSample={() => {
                 if (hasAnyData && !confirm("現在のデータをサンプルで置き換えます。よろしいですか？")) return;
                 seedSampleData();
-                setStep(5);
+                setStep(6);
               }}
             />
           )}
@@ -105,15 +107,18 @@ export default function SetupWizard() {
             <StepBaseMonth planBaseMonth={planBaseMonth} setPlanBaseMonth={setPlanBaseMonth} />
           )}
           {step === 2 && (
-            <StepFactory factoryMasters={factoryMasters} addFactory={addFactory} />
+            <StepTargetMonths value={targetMonths} setValue={setTargetMonths} />
           )}
           {step === 3 && (
-            <StepLine factoryMasters={factoryMasters} lineMasters={lineMasters} addLineMaster={addLineMaster} onBackToFactory={() => setStep(2)} />
+            <StepFactory factoryMasters={factoryMasters} addFactory={addFactory} />
           )}
           {step === 4 && (
-            <StepProduct lineMasters={lineMasters} productMasters={productMasters} addProduct={addProduct} onBackToLine={() => setStep(3)} />
+            <StepLine factoryMasters={factoryMasters} lineMasters={lineMasters} addLineMaster={addLineMaster} onBackToFactory={() => setStep(3)} />
           )}
           {step === 5 && (
+            <StepProduct lineMasters={lineMasters} productMasters={productMasters} addProduct={addProduct} onBackToLine={() => setStep(4)} />
+          )}
+          {step === 6 && (
             <StepDone
               factoryCount={factoryMasters.length}
               lineCount={lineMasters.length}
@@ -125,7 +130,7 @@ export default function SetupWizard() {
         </div>
 
         {/* フッター（ナビ）— 完了/開始ステップ以外 */}
-        {step >= 1 && step <= 4 && (
+        {step >= 1 && step <= 5 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-200">
             <button
               onClick={() => setStep(step - 1)}
@@ -201,7 +206,27 @@ function StepBaseMonth({ planBaseMonth, setPlanBaseMonth }: {
   );
 }
 
-// ── ステップ2: 工場 ──
+// ── ステップ: 在庫月数目標 ──
+function StepTargetMonths({ value, setValue }: { value: number; setValue: (v: number) => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2"><Boxes className="w-4 h-4 text-blue-500" /><h2 className="font-semibold text-gray-800 text-sm">在庫月数目標（初期値）</h2></div>
+      <p className="text-xs text-gray-500">
+        翌月の販売計画の<strong>何ヶ月分</strong>を在庫として持つかの目安です。「生産計画立案」での生産必要数の計算（目標在庫＝在庫月数目標×翌月販売）の初期値に使われます。あとで変更できます。
+      </p>
+      <div className="flex items-center gap-3 pt-1">
+        <input type="range" min={0.5} max={4} step={0.25} value={value}
+          onChange={(e) => setValue(Number(e.target.value))} className="w-56" />
+        <span className="text-lg font-bold text-indigo-700 w-20">
+          {value.toFixed(2)}<span className="text-xs text-gray-400 ml-1">ヶ月</span>
+        </span>
+      </div>
+      <p className="text-xs text-gray-400">目安：1.0ヶ月＝最小限 ／ 1.5ヶ月＝標準 ／ 2.0ヶ月以上＝余裕を持つ</p>
+    </div>
+  );
+}
+
+// ── ステップ: 工場 ──
 function StepFactory({ factoryMasters, addFactory }: {
   factoryMasters: FactoryMaster[]; addFactory: (f: FactoryMaster) => void;
 }) {
