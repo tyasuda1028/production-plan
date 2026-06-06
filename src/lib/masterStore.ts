@@ -33,6 +33,12 @@ function buildDefaultOperatingDays(): OperatingDaysMaster[] {
 const defaultFactoryMasters: FactoryMaster[] = [];
 const defaultLineMasters: LineMaster[]       = [];
 
+/** 当月の YYYYMM（計画基準月の既定）。在庫の前月末はこれに連動する。 */
+function currentYearMonth(): number {
+  const d = new Date();
+  return d.getFullYear() * 100 + (d.getMonth() + 1);
+}
+
 interface MasterStore {
   // データ読み込み完了フラグ（localStorage からの初回ロードが終わるまで false）
   _hasHydrated: boolean;
@@ -123,8 +129,8 @@ export const useMasterStore = create<MasterStore>()(
       _hasHydrated: false,
       setHasHydrated: (v: boolean) => set({ _hasHydrated: v }),
 
-      // ── 計画基準月 ──
-      planBaseMonth: 202603,
+      // ── 計画基準月（既定は当月） ──
+      planBaseMonth: currentYearMonth(),
       setPlanBaseMonth: (ym: number) => set({ planBaseMonth: ym }),
 
       // ── 在庫月数目標の既定値・方式別パラメータ ──
@@ -381,7 +387,7 @@ export const useMasterStore = create<MasterStore>()(
 
       resetAll: () =>
         set({
-          planBaseMonth: 202603,
+          planBaseMonth: currentYearMonth(),
           defaultTargetInventoryMonths: 1.5,
           minTargetInventoryMonths: 0.5,
           productionCycleMonths: 2,
@@ -420,6 +426,17 @@ export const useMasterStore = create<MasterStore>()(
       // Supabase（クラウド保存・多端末同期）が有効ならそちら、
       // 未設定なら従来どおり localStorage のみで動作
       storage: supabaseEnabled ? createSupabaseStorage() : createLocalStorage(),
+      // 計画基準月は「当月を下回らない」ように補正して開く。
+      // 保存値が過去（または未設定）なら当月へ繰り上げ、未来月の選択はそのまま保持。
+      // → 在庫の前月末 = 計画基準月-1 が常に当月以降に連動する。
+      merge: (persisted, current) => {
+        const merged = { ...current, ...(persisted as Partial<MasterStore>) } as MasterStore;
+        const now = currentYearMonth();
+        if (!merged.planBaseMonth || merged.planBaseMonth < now) {
+          merged.planBaseMonth = now;
+        }
+        return merged;
+      },
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
