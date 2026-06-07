@@ -157,18 +157,6 @@ export default function ProductMasterTab() {
     setEditBuf({ ...p, productionMethod: normalizeMethod(p.productionMethod) });
   }
 
-  // 生産方式を一括正規化
-  function fixAllMethods() {
-    useMasterStore.setState((s) => ({
-      productMasters: s.productMasters.map((p) => ({
-        ...p,
-        productionMethod: normalizeMethod(p.productionMethod),
-      })),
-    }));
-    setImportSuccess("生産方式を一括修正しました");
-    setTimeout(() => setImportSuccess(""), 3000);
-  }
-
   function saveEdit() {
     if (editing) {
       useMasterStore.setState((s) => ({
@@ -259,10 +247,6 @@ export default function ProductMasterTab() {
           <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
         </label>
         <CsvExportButton products={productMasters} fields={productFields} />
-        <button onClick={fixAllMethods}
-          className="flex items-center gap-1.5 text-xs border border-orange-300 text-orange-700 rounded px-3 py-1.5 hover:bg-orange-50">
-          生産方式を一括修正
-        </button>
         {importSuccess && <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">{importSuccess}</span>}
         {importError && <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">{importError}</span>}
         <span className="ml-auto text-xs text-gray-400">{productMasters.length} 品目</span>
