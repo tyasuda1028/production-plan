@@ -65,7 +65,7 @@ export default function Sidebar() {
           <Factory style={{ width: 18, height: 18 }} className="text-white" />
         </div>
         <div className="leading-tight">
-          <div className="font-bold text-gray-800 text-sm">生産計画システム</div>
+          <div className="font-bold text-gray-800 text-sm">生産計画ナビ</div>
           <div className="text-[10px] text-gray-400">Production Planning</div>
         </div>
       </div>

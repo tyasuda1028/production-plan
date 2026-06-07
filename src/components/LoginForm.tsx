@@ -11,7 +11,7 @@ export default function LoginForm() {
         <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow">
           <Factory className="w-8 h-8 text-white" />
         </div>
-        <h1 className="text-xl font-bold text-gray-900">生産計画システム</h1>
+        <h1 className="text-xl font-bold text-gray-900">生産計画ナビ</h1>
         <p className="text-sm text-gray-400 mt-1">Production Planning System</p>
       </div>
 

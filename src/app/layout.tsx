@@ -4,7 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "生産計画システム",
+  title: "生産計画ナビ",
   description: "中小製造業向け 生産計画管理システム",
 };
 
