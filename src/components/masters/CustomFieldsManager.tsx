@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMasterStore } from "@/lib/masterStore";
+import { useUiStore } from "@/lib/uiStore";
 import { CustomFieldTarget } from "@/lib/masterTypes";
 import { Plus, X, Pencil, Check, Settings2 } from "lucide-react";
 
@@ -17,6 +18,8 @@ export default function CustomFieldsManager({ target }: { target: CustomFieldTar
   const addCustomField = useMasterStore((s) => s.addCustomField);
   const renameCustomField = useMasterStore((s) => s.renameCustomField);
   const deleteCustomField = useMasterStore((s) => s.deleteCustomField);
+  const requestConfirm = useUiStore((s) => s.requestConfirm);
+  const addToast = useUiStore((s) => s.addToast);
 
   const [newLabel, setNewLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -39,10 +42,14 @@ export default function CustomFieldsManager({ target }: { target: CustomFieldTar
     setEditingId(null);
   }
 
-  function handleDelete(id: string, label: string) {
-    if (confirm(`カスタム項目「${label}」を削除します。\nこの列と入力済みの値もすべて消えます。よろしいですか？`)) {
-      deleteCustomField(target, id);
-    }
+  async function handleDelete(id: string, label: string) {
+    const ok = await requestConfirm(
+      `カスタム項目「${label}」を削除します。\nこの列と入力済みの値もすべて消えます。よろしいですか？`,
+      { danger: true, okLabel: "削除する" }
+    );
+    if (!ok) return;
+    deleteCustomField(target, id);
+    addToast("success", `カスタム項目「${label}」を削除しました`);
   }
 
   return (

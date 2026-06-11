@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMasterStore } from "@/lib/masterStore";
+import { useUiStore } from "@/lib/uiStore";
 import { LineMaster } from "@/lib/masterTypes";
 import { Pencil, Check, X, Plus, Trash2 } from "lucide-react";
 import CustomFieldsManager from "./CustomFieldsManager";
@@ -48,6 +49,9 @@ export default function LineSettingsTab() {
   const [editing, setEditing] = useState<number | null>(null);
   const [editOriginalNum, setEditOriginalNum] = useState<number | null>(null);
   const [editBuf, setEditBuf] = useState<LineMaster | null>(null);
+
+  const requestConfirm = useUiStore((s) => s.requestConfirm);
+  const addToast = useUiStore((s) => s.addToast);
 
   const [adding, setAdding] = useState(false);
   const [newBuf, setNewBuf] = useState<{ lineNumber: string } & Omit<LineMaster, "lineNumber">>({
@@ -290,10 +294,14 @@ export default function LineSettingsTab() {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`ライン ${l.lineNumber}（${l.lineName}）を削除しますか？`)) {
-                              deleteLineMaster(l.lineNumber);
-                            }
+                          onClick={async () => {
+                            const ok = await requestConfirm(
+                              `ライン ${l.lineNumber}（${l.lineName}）を削除しますか？`,
+                              { danger: true, okLabel: "削除する" }
+                            );
+                            if (!ok) return;
+                            deleteLineMaster(l.lineNumber);
+                            addToast("success", `ライン ${l.lineNumber}（${l.lineName}）を削除しました`);
                           }}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                           title="削除"

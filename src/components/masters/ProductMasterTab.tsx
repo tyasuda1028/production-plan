@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMasterStore } from "@/lib/masterStore";
+import { useUiStore } from "@/lib/uiStore";
 import { ProductMaster, LineMaster, PALLET_TYPES, CustomFieldDef } from "@/lib/masterTypes";
 import { METHOD_LABELS, normalizeMethod, methodDef } from "@/lib/productionMethods";
 import { Plus, Pencil, Trash2, Upload, Download, Check, X } from "lucide-react";
@@ -152,6 +153,19 @@ export default function ProductMasterTab() {
 
   const rowKey = (p: ProductMaster) => p.modelCode || p.code || "";
 
+  const requestConfirm = useUiStore((s) => s.requestConfirm);
+  const addToast = useUiStore((s) => s.addToast);
+
+  async function handleDelete(p: ProductMaster) {
+    const ok = await requestConfirm(
+      `製品「${p.modelCode || p.code}」を削除しますか？`,
+      { danger: true, okLabel: "削除する" }
+    );
+    if (!ok) return;
+    deleteProduct(p.code || p.modelCode);
+    addToast("success", `製品「${p.modelCode || p.code}」を削除しました`);
+  }
+
   function startEdit(p: ProductMaster) {
     setEditing(rowKey(p));
     setEditBuf({ ...p, productionMethod: normalizeMethod(p.productionMethod) });
@@ -222,6 +236,7 @@ export default function ProductMasterTab() {
         importProducts(rows);
         setImportSuccess(`${rows.length}件をインポートしました`);
         setImportError("");
+        addToast("success", `製品マスターに${rows.length}件をインポートしました`);
         setTimeout(() => setImportSuccess(""), 3000);
       } catch {
         setImportError("CSVの形式が正しくありません");
@@ -330,7 +345,7 @@ export default function ProductMasterTab() {
                         <button onClick={() => startEdit(p)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => deleteProduct(p.code || p.modelCode)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                        <button onClick={() => handleDelete(p)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

@@ -8,6 +8,8 @@ import Sidebar from "@/components/Sidebar";
 import HydrationGuard from "@/components/HydrationGuard";
 import LoginForm from "@/components/LoginForm";
 import SetupWizard from "@/components/SetupWizard";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import Toaster from "@/components/Toaster";
 
 // Clerk 公開キーが設定されているときだけ認証を有効化する
 const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -39,6 +41,8 @@ function AppBody({ children }: { children: React.ReactNode }) {
         <HydrationGuard>{children}</HydrationGuard>
       </main>
       <SetupWizard />
+      <ConfirmDialog />
+      <Toaster />
     </div>
   );
 }

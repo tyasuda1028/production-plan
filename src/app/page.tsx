@@ -6,7 +6,16 @@ import { useMasterStore } from "@/lib/masterStore";
 import { useLeveledPlans } from "@/lib/useLeveledPlans";
 import { LineMaster } from "@/lib/masterTypes";
 import LineCard from "@/components/dashboard/LineCard";
+import EmptyState from "@/components/EmptyState";
 import { ChevronDown, ChevronRight } from "lucide-react";
+
+// 在庫月数の状態色（<1.0 不足リスク / 適正 / >2.5 過剰気味）
+function invMonthsColor(v: number): string {
+  if (v <= 0) return "text-gray-800";
+  if (v < 1.0) return "text-red-600";
+  if (v > 2.5) return "text-amber-600";
+  return "text-green-600";
+}
 
 const PALETTE = [
   "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
@@ -188,18 +197,29 @@ export default function DashboardPage() {
       {/* 全体サマリー */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { label: `販売計画（${formatYearMonth(planBaseMonth)}）`, value: currentKPI.salesPlan },
-          { label: `生産計画（${formatYearMonth(planBaseMonth)}）`, value: currentKPI.productionSchedule },
-          { label: `月末在庫（${formatYearMonth(planBaseMonth)}）`, value: currentKPI.monthEndInventory },
-          { label: `在庫月数（${formatYearMonth(planBaseMonth)}）`, value: `${currentKPI.inventoryMonths.toFixed(1)} ヶ月` },
+          { label: `販売計画（${formatYearMonth(planBaseMonth)}）`, value: currentKPI.salesPlan, unit: "台" },
+          { label: `生産計画（${formatYearMonth(planBaseMonth)}）`, value: currentKPI.productionSchedule, unit: "台" },
+          { label: `月末在庫（${formatYearMonth(planBaseMonth)}）`, value: currentKPI.monthEndInventory, unit: "台" },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="text-xs text-gray-500 mb-1">{kpi.label}</div>
             <div className="text-2xl font-bold text-gray-800">
-              {typeof kpi.value === "number" ? kpi.value.toLocaleString() : kpi.value}
+              {kpi.value.toLocaleString()}
+              <span className="text-xs font-normal text-gray-400 ml-1">{kpi.unit}</span>
             </div>
           </div>
         ))}
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 mb-1">在庫月数（{formatYearMonth(planBaseMonth)}）</div>
+          <div className={`text-2xl font-bold ${invMonthsColor(currentKPI.inventoryMonths)}`}>
+            {currentKPI.inventoryMonths.toFixed(1)}
+            <span className="text-xs font-normal text-gray-400 ml-1">ヶ月</span>
+          </div>
+          <div className="text-[10px] text-gray-400 mt-0.5">
+            {currentKPI.inventoryMonths > 0 && currentKPI.inventoryMonths < 1.0 && "⚠ 在庫不足のリスク"}
+            {currentKPI.inventoryMonths > 2.5 && "在庫過剰気味"}
+          </div>
+        </div>
       </div>
 
       {/* 工場タブ + ラインフィルター */}
@@ -273,9 +293,7 @@ export default function DashboardPage() {
 
       {/* コンテンツ */}
       {factoryGroups.length === 0 ? (
-        <div className="py-12 text-center text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
-          工場マスターにデータがありません。マスター設定 → 工場マスター で登録してください。
-        </div>
+        <EmptyState message={"まだ工場・ラインが登録されていません。\nセットアップで基本データを登録すると、ここに生産状況が表示されます。"} />
       ) : (
         <div className="space-y-10">
           {visibleGroups.map(({ factory, classifications }) => (

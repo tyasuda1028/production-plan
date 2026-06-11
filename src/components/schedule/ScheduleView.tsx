@@ -5,6 +5,7 @@ import { formatYearMonth, getPlanMonths } from "@/lib/data";
 import { useMasterStore } from "@/lib/masterStore";
 import { ProductMaster, pmKey } from "@/lib/masterTypes";
 import { useLeveledPlans } from "@/lib/useLeveledPlans";
+import EmptyState from "@/components/EmptyState";
 import { Download, Database } from "lucide-react";
 
 // 分類ごとのカラー（インデックスで循環）
@@ -616,9 +617,13 @@ export default function ScheduleView() {
       )}
 
       {totalFiltered === 0 && (
-        <div className="py-16 text-center text-gray-400 text-sm bg-white border border-gray-200 rounded-lg">
-          該当する品目が見つかりません
-        </div>
+        productMasters.filter((pm) => pm.active !== false).length === 0 ? (
+          <EmptyState message={"製品マスターに品目がありません。\n製品と販売計画を登録すると日割りスケジュールが自動生成されます。"} />
+        ) : (
+          <div className="py-16 text-center text-gray-400 text-sm bg-white border border-gray-200 rounded-lg">
+            該当する品目が見つかりません
+          </div>
+        )
       )}
 
       <p className="text-xs text-gray-400">

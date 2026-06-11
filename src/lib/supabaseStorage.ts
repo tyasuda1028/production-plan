@@ -1,6 +1,11 @@
 import { PersistStorage, StorageValue } from 'zustand/middleware';
 import { getSupabase } from './supabaseClient';
 import { getStorageUserId } from './localStore';
+import { useUiStore } from './uiStore';
+
+function setSync(status: 'idle' | 'saving' | 'saved' | 'error') {
+  useUiStore.getState().setSyncStatus(status);
+}
 
 /**
  * Zustand persist 用 Supabase ストレージアダプタ（非同期）
@@ -51,12 +56,16 @@ async function flush(): Promise<void> {
   hasPending = false;
   pendingValue = undefined;
   if (!sb || !uid) return;
-  const { error } = await sb
-    .from(TABLE)
-    .upsert({ user_id: uid, data: value, updated_at: new Date().toISOString() });
-  if (error) {
+  try {
+    const { error } = await sb
+      .from(TABLE)
+      .upsert({ user_id: uid, data: value, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    setSync('saved');
+  } catch (e) {
     // 失敗してもミラー（localStorage）が残るため致命ではない
-    console.warn('[supabaseStorage] upsert failed:', error.message);
+    console.warn('[supabaseStorage] upsert failed:', (e as Error).message);
+    setSync('error');
   }
 }
 
@@ -103,6 +112,7 @@ export function createSupabaseStorage<T>(): PersistStorage<T> {
       lsSet(name, value);              // 即時ミラー
       pendingValue = value;            // Supabase はデバウンスで
       hasPending = true;
+      setSync('saving');
       if (writeTimer) clearTimeout(writeTimer);
       writeTimer = setTimeout(flush, DEBOUNCE_MS);
     },

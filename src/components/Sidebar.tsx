@@ -11,6 +11,7 @@ import { useMasterStore } from "@/lib/masterStore";
 import { useUiStore } from "@/lib/uiStore";
 import { formatYearMonth, addMonths } from "@/lib/data";
 import { useUser, useClerk } from "@clerk/nextjs";
+import SyncStatus from "@/components/SyncStatus";
 
 // Clerk 公開キーが設定されているときだけユーザー情報・ログアウトを表示
 const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -105,6 +106,11 @@ export default function Sidebar() {
           <span className="flex-1 text-left">セットアップ</span>
         </button>
       </nav>
+
+      {/* 保存状態 */}
+      <div className="px-3 py-2 border-t border-gray-200">
+        <SyncStatus />
+      </div>
 
       {/* 計画基準月セレクター */}
       <div className="px-4 py-3 border-t border-gray-200 space-y-1.5">

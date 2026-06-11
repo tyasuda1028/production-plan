@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useMasterStore } from "@/lib/masterStore";
+import { useUiStore } from "@/lib/uiStore";
 import { FactoryMaster } from "@/lib/masterTypes";
 import { Plus, Pencil, Trash2, Check, X, AlertTriangle } from "lucide-react";
 import CustomFieldsManager from "./CustomFieldsManager";
@@ -145,13 +146,19 @@ export default function FactoryMasterTab() {
     setAddError("");
   }
 
-  function handleDelete(f: FactoryMaster) {
+  const requestConfirm = useUiStore((s) => s.requestConfirm);
+  const addToast = useUiStore((s) => s.addToast);
+
+  async function handleDelete(f: FactoryMaster) {
     const count = lineCountByFactory(f.factoryName);
     const msg =
       count > 0
         ? `「${f.factoryName}」を削除しますか？\n（この工場を設定している ${count} ラインの工場名はそのまま残ります）`
         : `「${f.factoryName}」を削除しますか？`;
-    if (confirm(msg)) deleteFactory(f.factoryName);
+    const ok = await requestConfirm(msg, { danger: true, okLabel: "削除する" });
+    if (!ok) return;
+    deleteFactory(f.factoryName);
+    addToast("success", `工場「${f.factoryName}」を削除しました`);
   }
 
   return (

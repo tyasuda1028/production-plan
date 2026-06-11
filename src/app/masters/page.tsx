@@ -9,20 +9,22 @@ import LineSettingsTab from "@/components/masters/LineSettingsTab";
 import SalesPlanTab from "@/components/masters/SalesPlanTab";
 import FactoryMasterTab from "@/components/masters/FactoryMasterTab";
 import { useMasterStore } from "@/lib/masterStore";
+import { useUiStore } from "@/lib/uiStore";
 
+// セットアップの流れ（工場→ライン→製品→計画→在庫→稼働日）に合わせた並び
 const TABS = [
-  { id: "products",       label: "製品マスター",      icon: Package,    desc: "製品コード・パレット設定・ライン設定" },
   { id: "factories",      label: "工場マスター",       icon: Building2,  desc: "工場名・分類の管理" },
   { id: "lines",          label: "ラインマスター",     icon: Layers,     desc: "ライン番号・工場・日量能力の設定" },
+  { id: "products",       label: "製品マスター",      icon: Package,    desc: "製品コード・パレット設定・ライン設定" },
   { id: "sales-plan",     label: "販売計画入力",      icon: TrendingUp, desc: "品目ごとに先6ヶ月分の販売計画を入力" },
-  { id: "operating-days", label: "稼働日マスター",    icon: Calendar,   desc: "月別稼働日カレンダー設定" },
   { id: "inventory",      label: "在庫数入力",        icon: Boxes,      desc: "品目ごとの在庫数を入力（手入力・CSV両対応）" },
+  { id: "operating-days", label: "稼働日マスター",    icon: Calendar,   desc: "月別稼働日カレンダー設定" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
 export default function MastersPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("products");
+  const [activeTab, setActiveTab] = useState<TabId>("factories");
   const current = TABS.find((t) => t.id === activeTab)!;
   const { clearYearData, resetAll, salesPlanOverrides, inventorySnapshots, simMonthOverrides, operatingDays, productMasters, factoryMasters, lineMasters } = useMasterStore();
 
@@ -37,9 +39,17 @@ export default function MastersPage() {
     return Array.from(new Set(all)).sort();
   }, [salesPlanOverrides, inventorySnapshots, simMonthOverrides, operatingDays]);
 
-  function handleClearYear(year: number) {
-    if (!confirm(`${year}年のデータ（販売計画・在庫・シミュレーション・稼働日）を全て削除します。よろしいですか？`)) return;
+  const requestConfirm = useUiStore((s) => s.requestConfirm);
+  const addToast = useUiStore((s) => s.addToast);
+
+  async function handleClearYear(year: number) {
+    const ok = await requestConfirm(
+      `${year}年のデータ（販売計画・在庫・シミュレーション・稼働日）を全て削除します。よろしいですか？`,
+      { danger: true, okLabel: "削除する" }
+    );
+    if (!ok) return;
     clearYearData(year);
+    addToast("success", `${year}年のデータを削除しました`);
   }
 
   // 全データ削除（このユーザーの保存データを初期状態に戻す）
@@ -51,12 +61,14 @@ export default function MastersPage() {
     inventorySnapshots.length > 0 ||
     simMonthOverrides.length > 0;
 
-  function handleResetAll() {
-    if (!confirm(
-      "全てのデータ（製品・工場・ライン・販売計画・在庫・シミュレーション・稼働日）を削除し、初期状態に戻します。\nこの操作は取り消せません。よろしいですか？"
-    )) return;
-    if (!confirm("本当に全データを削除しますか？（最終確認）")) return;
+  async function handleResetAll() {
+    const ok = await requestConfirm(
+      "全てのデータ（製品・工場・ライン・販売計画・在庫・シミュレーション・稼働日）を削除し、初期状態に戻します。\nこの操作は取り消せません。本当に削除しますか？",
+      { danger: true, okLabel: "全データを削除する" }
+    );
+    if (!ok) return;
     resetAll();
+    addToast("success", "全データを削除しました");
   }
 
   return (

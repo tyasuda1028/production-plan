@@ -4,6 +4,8 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { getPlanMonths, formatYearMonth } from "@/lib/data";
 import { ProductMaster, SalesPlanOverride, pmKey } from "@/lib/masterTypes";
+import { useUiStore } from "@/lib/uiStore";
+import { handleGridKeyDown } from "@/lib/gridNav";
 import { Search, RotateCcw, Upload, Download, FileText, Check, AlertTriangle, Trash2 } from "lucide-react";
 
 // ── CSV インポート関連型 ──
@@ -136,6 +138,7 @@ function CsvImportSection({
     const known = preview.filter((r) => r.isKnown);
     onImport(known);
     setSuccess(`${known.length}品目の販売計画をインポートしました`);
+    useUiStore.getState().addToast("success", `販売計画に${known.length}品目をインポートしました`);
     setPreview(null);
     setTimeout(() => setSuccess(""), 5000);
   }
@@ -282,6 +285,8 @@ export default function SalesPlanTab() {
   const productMasters       = useMasterStore((s) => s.productMasters);
 
   const planMonths = getPlanMonths(planBaseMonth);
+  const now = new Date();
+  const nowYM = now.getFullYear() * 100 + (now.getMonth() + 1);
 
   // オーバーライドに含まれる全月 + 計画月 を統合して表示列にする
   const displayMonths = useMemo(() => {
@@ -420,6 +425,9 @@ export default function SalesPlanTab() {
                 {displayMonths.map((ym) => (
                   <th key={ym} className={`px-2 py-2 text-right text-xs font-medium whitespace-nowrap min-w-[90px] ${planMonths.includes(ym) ? "text-blue-600" : "text-gray-400"}`}>
                     <div className="flex items-center justify-end gap-1">
+                      {ym === nowYM && (
+                        <span className="text-[9px] bg-blue-600 text-white px-1 py-0.5 rounded font-medium">今月</span>
+                      )}
                       <span>{formatYearMonth(ym)}</span>
                       <button
                         onClick={() => clearMonth(ym)}
@@ -435,11 +443,11 @@ export default function SalesPlanTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((pm) => {
+              {filtered.map((pm, rowIdx) => {
                 const id = pmKey(pm);
                 const modified = hasAnyOverride(id);
                 return (
-                  <tr key={id} className={`hover:bg-gray-50 ${modified ? "bg-blue-50/30" : ""}`}>
+                  <tr key={id} className={`hover:bg-gray-50 focus-within:bg-blue-50/40 ${modified ? "bg-blue-50/30" : ""}`}>
                     <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800 whitespace-nowrap sticky left-0 bg-inherit z-10">
                       {pm.code || <span className="text-gray-400">—</span>}
                     </td>
@@ -453,10 +461,14 @@ export default function SalesPlanTab() {
                       return (
                         <td key={ym} className="px-2 py-1.5 text-right">
                           <input
-                            type="number"
-                            defaultValue={displayVal}
+                            type="text"
+                            inputMode="numeric"
+                            defaultValue={displayVal.toLocaleString()}
                             key={`${id}-${ym}-${displayVal}`}
-                            min={0}
+                            data-row={rowIdx}
+                            data-col={ym}
+                            onFocus={(e) => e.target.select()}
+                            onKeyDown={(e) => handleGridKeyDown(e, rowIdx, ym)}
                             onBlur={(e) => handleBlur(id, ym, e.target.value)}
                             className={`w-20 text-right text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                               changed

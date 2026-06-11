@@ -6,6 +6,7 @@ import { useMasterStore } from "@/lib/masterStore";
 import { useVirtualProducts } from "@/lib/useLeveledPlans";
 import { calcSimulation, buildDefaultInputs, MonthInput } from "@/lib/simulation";
 import { targetMonthsForMethod } from "@/lib/productionMethods";
+import EmptyState from "@/components/EmptyState";
 import { Search, SlidersHorizontal, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Download } from "lucide-react";
 
 // 在庫月数の色分け
@@ -289,9 +290,13 @@ export default function SimulationView() {
 
       {/* 一覧テーブル */}
       {filtered.length === 0 ? (
-        <div className="py-16 text-center text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
-          該当する品目が見つかりません
-        </div>
+        virtualProducts.length === 0 ? (
+          <EmptyState message={"製品マスターに品目がありません。\n製品と販売計画を登録すると、在庫月数目標から生産必要数をシミュレーションできます。"} />
+        ) : (
+          <div className="py-16 text-center text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
+            該当する品目が見つかりません
+          </div>
+        )
       ) : (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="overflow-x-auto">

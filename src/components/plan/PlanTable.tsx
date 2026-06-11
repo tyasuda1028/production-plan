@@ -6,6 +6,7 @@ import { useMasterStore } from "@/lib/masterStore";
 import { Product } from "@/lib/types";
 import { useLeveledPlans, LeveledPlan, useVirtualProducts } from "@/lib/useLeveledPlans";
 import { PRODUCTION_METHODS, methodDef, methodLetter } from "@/lib/productionMethods";
+import EmptyState from "@/components/EmptyState";
 import { ChevronDown, ChevronRight, Search, Filter } from "lucide-react";
 
 type ExpandedRows = Record<string, boolean>;
@@ -25,6 +26,8 @@ export default function PlanTable() {
   const planBaseMonth = useMasterStore((s) => s.planBaseMonth);
   const lineMasters   = useMasterStore((s) => s.lineMasters);
   const planMonths    = getPlanMonths(planBaseMonth);
+  const now = new Date();
+  const nowYM = now.getFullYear() * 100 + (now.getMonth() + 1);
 
   // 共有フックから均等日量計画を取得
   const leveledPlansMap  = useLeveledPlans();
@@ -136,7 +139,7 @@ export default function PlanTable() {
           <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}
             className="text-sm border border-gray-200 rounded px-2 py-1.5 bg-white font-medium">
             {planMonths.map((m) => (
-              <option key={m} value={m}>{formatYearMonth(m)}</option>
+              <option key={m} value={m}>{formatYearMonth(m)}{m === nowYM ? "（今月）" : ""}</option>
             ))}
           </select>
         </div>
@@ -293,9 +296,15 @@ export default function PlanTable() {
           </table>
 
           {filtered.length === 0 && (
-            <div className="py-16 text-center text-gray-400 text-sm">
-              該当する品目が見つかりません
-            </div>
+            virtualProducts.length === 0 ? (
+              <div className="p-6">
+                <EmptyState message={"製品マスターに品目がありません。\n製品を登録すると生産計画が自動計算されます。"} />
+              </div>
+            ) : (
+              <div className="py-16 text-center text-gray-400 text-sm">
+                該当する品目が見つかりません
+              </div>
+            )
           )}
         </div>
       </div>

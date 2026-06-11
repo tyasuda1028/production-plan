@@ -4,6 +4,8 @@ import { useState, useMemo, useRef } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { getPlanMonths, formatYearMonth, addMonths } from "@/lib/data";
 import { pmKey } from "@/lib/masterTypes";
+import { useUiStore } from "@/lib/uiStore";
+import { handleGridKeyDown } from "@/lib/gridNav";
 import { Upload, FileText, Check, AlertTriangle, Download, Search, RotateCcw, Trash2 } from "lucide-react";
 
 interface PreviewRow {
@@ -23,6 +25,8 @@ export default function InventoryImportTab() {
 
   const prevMonth  = addMonths(planBaseMonth, -1);
   const planMonths = getPlanMonths(planBaseMonth);
+  const now = new Date();
+  const nowYM = now.getFullYear() * 100 + (now.getMonth() + 1);
   const baseMonths = useMemo(() => [prevMonth, ...planMonths], [prevMonth, planMonths]);
 
   // 基準月 + スナップショットに含まれる月をまとめて表示列にする
@@ -107,6 +111,7 @@ export default function InventoryImportTab() {
     if (!preview) return;
     importInventoryCSV(targetYM, preview.map((r) => ({ code: r.code, quantity: r.quantity })));
     setSuccess(`${preview.length}件の在庫データをインポートしました（${formatYearMonth(targetYM)}）`);
+    useUiStore.getState().addToast("success", `在庫データ${preview.length}件をインポートしました（${formatYearMonth(targetYM)}）`);
     setPreview(null);
     setTimeout(() => setSuccess(""), 5000);
   }
@@ -318,6 +323,9 @@ export default function InventoryImportTab() {
                 {displayMonths.map((ym) => (
                   <th key={ym} className={`px-2 py-2 text-right text-xs font-medium whitespace-nowrap min-w-[90px] ${ym === prevMonth ? "text-blue-600" : "text-gray-400"}`}>
                     <div className="flex items-center justify-end gap-1">
+                      {ym === nowYM && (
+                        <span className="text-[9px] bg-blue-600 text-white px-1 py-0.5 rounded font-medium">今月</span>
+                      )}
                       <span>{formatYearMonth(ym)}{ym === prevMonth ? "（基準）" : ""}</span>
                       <button
                         onClick={() => clearMonth(ym)}
@@ -333,11 +341,11 @@ export default function InventoryImportTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((pm) => {
+              {filtered.map((pm, rowIdx) => {
                 const id = pmKey(pm);
                 const modified = hasAnyQty(id);
                 return (
-                  <tr key={id} className={`hover:bg-gray-50 ${modified ? "bg-blue-50/30" : ""}`}>
+                  <tr key={id} className={`hover:bg-gray-50 focus-within:bg-blue-50/40 ${modified ? "bg-blue-50/30" : ""}`}>
                     <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800 whitespace-nowrap sticky left-0 bg-inherit z-10">
                       {pm.code || <span className="text-gray-400">—</span>}
                     </td>
@@ -352,10 +360,14 @@ export default function InventoryImportTab() {
                       return (
                         <td key={ym} className="px-2 py-1.5 text-right">
                           <input
-                            type="number"
-                            defaultValue={displayVal}
+                            type="text"
+                            inputMode="numeric"
+                            defaultValue={displayVal.toLocaleString()}
                             key={`${id}-${ym}-${displayVal}`}
-                            min={0}
+                            data-row={rowIdx}
+                            data-col={ym}
+                            onFocus={(e) => e.target.select()}
+                            onKeyDown={(e) => handleGridKeyDown(e, rowIdx, ym)}
                             onBlur={(e) => handleBlur(id, ym, e.target.value)}
                             className={`w-20 text-right text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                               changed

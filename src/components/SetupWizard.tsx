@@ -44,6 +44,8 @@ export default function SetupWizard() {
   const setupOpen = useUiStore((s) => s.setupOpen);
   const openSetup = useUiStore((s) => s.openSetup);
   const closeSetup = useUiStore((s) => s.closeSetup);
+  const requestConfirm = useUiStore((s) => s.requestConfirm);
+  const addToast = useUiStore((s) => s.addToast);
 
   const [step, setStep] = useState(0);
 
@@ -101,9 +103,16 @@ export default function SetupWizard() {
             <StepStart
               hasAnyData={hasAnyData}
               onEmpty={() => setStep(1)}
-              onSample={() => {
-                if (hasAnyData && !confirm("現在のデータをサンプルで置き換えます。よろしいですか？")) return;
+              onSample={async () => {
+                if (hasAnyData) {
+                  const ok = await requestConfirm(
+                    "現在のデータをサンプルで置き換えます。よろしいですか？",
+                    { danger: true, okLabel: "置き換える" }
+                  );
+                  if (!ok) return;
+                }
                 seedSampleData();
+                addToast("success", "サンプルデータを投入しました");
                 setStep(6);
               }}
             />
@@ -310,7 +319,10 @@ function StepLine({ factoryMasters, lineMasters, addLineMaster, onBackToFactory 
   function add() {
     const n = parseInt(num, 10);
     if (isNaN(n) || n <= 0 || !name.trim()) return;
-    if (lineMasters.some((l) => l.lineNumber === n)) { alert(`ライン ${n} は既に存在します`); return; }
+    if (lineMasters.some((l) => l.lineNumber === n)) {
+      useUiStore.getState().addToast("error", `ライン ${n} は既に存在します`);
+      return;
+    }
     const f = factoryMasters.find((x) => x.factoryName === factory);
     addLineMaster({
       lineNumber: n, lineName: name.trim(), factoryName: factory,
