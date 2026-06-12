@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import React from "react";
 import {
   LayoutDashboard, Table2, CalendarDays, FlaskConical, Settings,
-  ChevronLeft, ChevronRight, Factory, LogOut, Sparkles,
+  ChevronLeft, ChevronRight, Factory, LogOut, Sparkles, PackageSearch,
 } from "lucide-react";
 import { useMasterStore } from "@/lib/masterStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -20,7 +20,8 @@ const navItems: { href: string; label: string; icon: React.ElementType; badge?: 
   { href: "/",          label: "ダッシュボード",   icon: LayoutDashboard },
   { href: "/plan",      label: "生産計画表",        icon: Table2 },
   { href: "/schedule",  label: "日割りスケジュール", icon: CalendarDays },
-  { href: "/simulate",  label: "生産計画立案",       icon: FlaskConical, badge: "NEW" },
+  { href: "/simulate",  label: "生産計画立案",       icon: FlaskConical },
+  { href: "/mrp",       label: "所要量計算（MRP）",  icon: PackageSearch, badge: "NEW" },
   { href: "/masters",   label: "マスター設定",       icon: Settings, divider: true },
 ];
 

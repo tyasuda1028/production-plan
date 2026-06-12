@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride, CustomFieldDef, CustomFieldTarget } from './masterTypes';
+import { ProductMaster, OperatingDaysMaster, InventorySnapshot, LineMaster, FactoryMaster, SalesPlanOverride, SimMonthOverride, CustomFieldDef, CustomFieldTarget, MaterialMaster, BomLine, MaterialStock } from './masterTypes';
 import { createLocalStorage } from './localStore';
 import { createSupabaseStorage } from './supabaseStorage';
 import { supabaseEnabled } from './supabaseClient';
@@ -101,6 +101,23 @@ interface MasterStore {
   setSimMonthOverride: (productId: string, yearMonth: number, field: 'salesPlan' | 'targetInventoryMonths', value: number) => void;
   setSimMonthInputs: (productId: string, inputs: Array<{yearMonth: number; salesPlan: number; targetInventoryMonths: number}>) => void;
   clearSimMonthOverrides: (productId: string) => void;
+
+  // 部材マスター（M-BOM/MRP）
+  materialMasters: MaterialMaster[];
+  addMaterial: (m: MaterialMaster) => void;
+  updateMaterial: (code: string, patch: Partial<MaterialMaster>) => void;
+  deleteMaterial: (code: string) => void;
+  importMaterials: (rows: MaterialMaster[]) => void;
+
+  // BOM（部品構成）
+  bomLines: BomLine[];
+  upsertBomLine: (productId: string, materialCode: string, qtyPer: number) => void;
+  deleteBomLine: (productId: string, materialCode: string) => void;
+  importBom: (rows: BomLine[]) => void;
+
+  // 部材在庫
+  materialStocks: MaterialStock[];
+  setMaterialStock: (materialCode: string, quantity: number) => void;
 
   // カスタム項目（ユーザー定義のマスター項目）
   productFields: CustomFieldDef[];
@@ -205,6 +222,8 @@ export const useMasterStore = create<MasterStore>()(
       deleteProduct: (code) =>
         set((s) => ({
           productMasters: s.productMasters.filter((p) => (p.code || p.modelCode) !== code),
+          // 製品削除時はBOM行も連動削除（孤立防止）
+          bomLines: s.bomLines.filter((b) => b.productId !== code),
         })),
 
       importProducts: (rows) =>
@@ -336,6 +355,74 @@ export const useMasterStore = create<MasterStore>()(
           simMonthOverrides: s.simMonthOverrides.filter((o) => o.productId !== productId),
         })),
 
+      // ── 部材マスター（M-BOM/MRP） ──
+      materialMasters: [],
+
+      addMaterial: (m) =>
+        set((s) => ({
+          materialMasters: [...s.materialMasters.filter((x) => x.code !== m.code), m]
+            .sort((a, b) => a.code.localeCompare(b.code)),
+        })),
+
+      updateMaterial: (code, patch) =>
+        set((s) => ({
+          materialMasters: s.materialMasters.map((m) => (m.code === code ? { ...m, ...patch } : m)),
+        })),
+
+      deleteMaterial: (code) =>
+        set((s) => ({
+          // 部材削除時はBOM行・在庫も連動削除（孤立防止）
+          materialMasters: s.materialMasters.filter((m) => m.code !== code),
+          bomLines: s.bomLines.filter((b) => b.materialCode !== code),
+          materialStocks: s.materialStocks.filter((st) => st.materialCode !== code),
+        })),
+
+      importMaterials: (rows) =>
+        set((s) => {
+          const map = new Map(s.materialMasters.map((m) => [m.code, m]));
+          rows.forEach((r) => map.set(r.code, r));
+          return { materialMasters: Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code)) };
+        }),
+
+      // ── BOM（部品構成） ──
+      bomLines: [],
+
+      upsertBomLine: (productId, materialCode, qtyPer) =>
+        set((s) => ({
+          bomLines: [
+            ...s.bomLines.filter((b) => !(b.productId === productId && b.materialCode === materialCode)),
+            { productId, materialCode, qtyPer },
+          ],
+        })),
+
+      deleteBomLine: (productId, materialCode) =>
+        set((s) => ({
+          bomLines: s.bomLines.filter(
+            (b) => !(b.productId === productId && b.materialCode === materialCode)
+          ),
+        })),
+
+      importBom: (rows) =>
+        set((s) => {
+          const map = new Map(s.bomLines.map((b) => [`${b.productId}::${b.materialCode}`, b]));
+          rows.forEach((r) => map.set(`${r.productId}::${r.materialCode}`, r));
+          return { bomLines: Array.from(map.values()) };
+        }),
+
+      // ── 部材在庫 ──
+      materialStocks: [],
+
+      setMaterialStock: (materialCode, quantity) =>
+        set((s) => ({
+          materialStocks:
+            quantity > 0
+              ? [
+                  ...s.materialStocks.filter((st) => st.materialCode !== materialCode),
+                  { materialCode, quantity },
+                ]
+              : s.materialStocks.filter((st) => st.materialCode !== materialCode),
+        })),
+
       // ── カスタム項目 ──
       productFields: [],
       factoryFields: [],
@@ -401,6 +488,9 @@ export const useMasterStore = create<MasterStore>()(
           productFields: [],
           factoryFields: [],
           lineFields: [],
+          materialMasters: [],
+          bomLines: [],
+          materialStocks: [],
           setupCompleted: false,
         }),
 
@@ -417,6 +507,9 @@ export const useMasterStore = create<MasterStore>()(
             productMasters: sample.productMasters,
             salesPlanOverrides: sample.salesPlanOverrides,
             inventorySnapshots: sample.inventorySnapshots,
+            materialMasters: sample.materialMasters,
+            bomLines: sample.bomLines,
+            materialStocks: sample.materialStocks,
             setupCompleted: true,
           };
         }),

@@ -43,6 +43,26 @@ export interface LineMaster {
   custom?: Record<string, string>; // カスタム項目の値（フィールドID→値）
 }
 
+// ========== 部材マスター（M-BOM/MRP用） ==========
+export interface MaterialMaster {
+  code: string;   // 部材コード（主キー）
+  name: string;   // 部材名
+  unit: string;   // 単位（個・kg・m など）
+}
+
+// ========== BOM（部品構成）行：製品1台あたりの部材使用量 ==========
+export interface BomLine {
+  productId: string;    // 製品の pmKey（品目コード優先）
+  materialCode: string; // 部材コード
+  qtyPer: number;       // 員数（親1台あたり使用量）
+}
+
+// ========== 部材在庫（MRPの引当て開始時点の現在庫） ==========
+export interface MaterialStock {
+  materialCode: string;
+  quantity: number;
+}
+
 // ========== 販売計画オーバーライド ==========
 export interface SalesPlanOverride {
   productId: string;   // Product.id (P001 etc.)

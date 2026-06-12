@@ -1,5 +1,6 @@
 import {
   ProductMaster, FactoryMaster, LineMaster, SalesPlanOverride, InventorySnapshot, pmKey,
+  MaterialMaster, BomLine, MaterialStock,
 } from './masterTypes';
 import { addMonths, getPlanMonths } from './data';
 
@@ -14,6 +15,9 @@ export interface SampleData {
   productMasters: ProductMaster[];
   salesPlanOverrides: SalesPlanOverride[];
   inventorySnapshots: InventorySnapshot[];
+  materialMasters: MaterialMaster[];
+  bomLines: BomLine[];
+  materialStocks: MaterialStock[];
 }
 
 const FACTORIES: FactoryMaster[] = [
@@ -53,6 +57,33 @@ const INVENTORY: Record<string, number> = {
   '1005': 1800,
 };
 
+// 部材マスター（M-BOM/MRP用）
+const MATERIALS: MaterialMaster[] = [
+  { code: 'M001', name: '制御基板',     unit: '枚' },
+  { code: 'M002', name: 'モーターユニット', unit: '個' },
+  { code: 'M003', name: '鋼板 1.2mm',   unit: '枚' },
+  { code: 'M004', name: 'ねじセット',   unit: '組' },
+  { code: 'M005', name: '塗料（白）',   unit: 'kg' },
+];
+
+// BOM（製品コード → [部材コード, 員数]）
+const BOM: Record<string, [string, number][]> = {
+  '1001': [['M001', 1], ['M003', 2], ['M004', 1]],
+  '1002': [['M001', 1], ['M002', 1], ['M003', 4], ['M004', 2]],
+  '1003': [['M001', 1], ['M003', 1], ['M004', 1]],
+  '1004': [['M001', 1], ['M002', 1], ['M004', 1]],
+  '1005': [['M003', 2], ['M005', 0.5]],
+};
+
+// 部材コード → 現在庫
+const MATERIAL_STOCK: Record<string, number> = {
+  M001: 8000,
+  M002: 2000,
+  M003: 15000,
+  M004: 10000,
+  M005: 300,
+};
+
 export function buildSampleData(base: number): SampleData {
   const months = getPlanMonths(base);
   const prev = addMonths(base, -1);
@@ -75,11 +106,27 @@ export function buildSampleData(base: number): SampleData {
     updatedAt: now,
   }));
 
+  const bomLines: BomLine[] = [];
+  PRODUCTS.forEach((p) => {
+    const id = pmKey(p);
+    (BOM[p.code] ?? []).forEach(([materialCode, qtyPer]) => {
+      bomLines.push({ productId: id, materialCode, qtyPer });
+    });
+  });
+
+  const materialStocks: MaterialStock[] = MATERIALS.map((m) => ({
+    materialCode: m.code,
+    quantity: MATERIAL_STOCK[m.code] ?? 0,
+  }));
+
   return {
     factoryMasters: FACTORIES,
     lineMasters: LINES,
     productMasters: PRODUCTS,
     salesPlanOverrides,
     inventorySnapshots,
+    materialMasters: MATERIALS,
+    bomLines,
+    materialStocks,
   };
 }

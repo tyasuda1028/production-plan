@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Package, Calendar, Boxes, Layers, TrendingUp, Building2, Trash2 } from "lucide-react";
+import { Package, Calendar, Boxes, Layers, TrendingUp, Building2, Trash2, Puzzle, ListTree } from "lucide-react";
 import ProductMasterTab from "@/components/masters/ProductMasterTab";
 import OperatingDaysTab from "@/components/masters/OperatingDaysTab";
 import InventoryImportTab from "@/components/masters/InventoryImportTab";
 import LineSettingsTab from "@/components/masters/LineSettingsTab";
 import SalesPlanTab from "@/components/masters/SalesPlanTab";
 import FactoryMasterTab from "@/components/masters/FactoryMasterTab";
+import MaterialMasterTab from "@/components/masters/MaterialMasterTab";
+import BomTab from "@/components/masters/BomTab";
 import { useMasterStore } from "@/lib/masterStore";
 import { useUiStore } from "@/lib/uiStore";
 
@@ -16,6 +18,8 @@ const TABS = [
   { id: "factories",      label: "工場マスター",       icon: Building2,  desc: "工場名・分類の管理" },
   { id: "lines",          label: "ラインマスター",     icon: Layers,     desc: "ライン番号・工場・日量能力の設定" },
   { id: "products",       label: "製品マスター",      icon: Package,    desc: "製品コード・パレット設定・ライン設定" },
+  { id: "materials",      label: "部材マスター",      icon: Puzzle,     desc: "部材（購入部品・原材料）と現在庫の管理" },
+  { id: "bom",            label: "BOM（部品構成）",   icon: ListTree,   desc: "製品1台あたりの部材使用量（員数）を登録" },
   { id: "sales-plan",     label: "販売計画入力",      icon: TrendingUp, desc: "品目ごとに先6ヶ月分の販売計画を入力" },
   { id: "inventory",      label: "在庫数入力",        icon: Boxes,      desc: "品目ごとの在庫数を入力（手入力・CSV両対応）" },
   { id: "operating-days", label: "稼働日マスター",    icon: Calendar,   desc: "月別稼働日カレンダー設定" },
@@ -128,6 +132,8 @@ export default function MastersPage() {
       {activeTab === "products"       && <ProductMasterTab />}
       {activeTab === "factories"      && <FactoryMasterTab />}
       {activeTab === "lines"          && <LineSettingsTab />}
+      {activeTab === "materials"      && <MaterialMasterTab />}
+      {activeTab === "bom"            && <BomTab />}
       {activeTab === "sales-plan"     && <SalesPlanTab />}
       {activeTab === "operating-days" && <OperatingDaysTab />}
       {activeTab === "inventory"      && <InventoryImportTab />}
