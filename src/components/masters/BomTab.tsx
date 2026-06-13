@@ -3,13 +3,16 @@
 import { useState, useMemo } from "react";
 import { useMasterStore } from "@/lib/masterStore";
 import { useUiStore } from "@/lib/uiStore";
-import { pmKey } from "@/lib/masterTypes";
-import { Plus, Trash2, Upload, Download, Search, ListTree } from "lucide-react";
+import { pmKey, BomLine } from "@/lib/masterTypes";
+import { wouldCreateBomCycle } from "@/lib/useMrp";
+import { Plus, Trash2, Upload, Download, Search, ListTree, Package, Puzzle } from "lucide-react";
+
+type ParentItem = { id: string; kind: "product" | "material"; code: string; label: string };
 
 /**
- * BOM（部品構成）タブ。
- * 製品を選択し、その製品1台あたりの部材使用量（員数）を登録する。
- * 単階層（製品→部材）。MRP（所要量計算）の入力になる。
+ * BOM（部品構成）タブ — 多階層対応。
+ * 親＝製品（Lv0）または 部材（半製品）。子＝部材。
+ * 各行に投入量・完成品を設定（スクラップ＝投入−完成、歩留まり自動）。
  */
 export default function BomTab() {
   const productMasters  = useMasterStore((s) => s.productMasters);
@@ -25,28 +28,39 @@ export default function BomTab() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string>("");
   const [newMaterial, setNewMaterial] = useState("");
-  const [newQty, setNewQty] = useState("1");
+  const [newInput, setNewInput] = useState("1");
+  const [newGood, setNewGood] = useState("");
 
-  const activeProducts = useMemo(
-    () => productMasters.filter((p) => p.active !== false),
-    [productMasters]
-  );
+  // 親候補（製品＋部材）
+  const parents: ParentItem[] = useMemo(() => {
+    const prods: ParentItem[] = productMasters
+      .filter((p) => p.active !== false)
+      .map((p) => ({ id: pmKey(p), kind: "product", code: p.code, label: p.modelCode }));
+    const mats: ParentItem[] = materialMasters.map((m) => ({ id: m.code, kind: "material", code: m.code, label: m.name }));
+    return [...prods, ...mats];
+  }, [productMasters, materialMasters]);
 
-  const filteredProducts = useMemo(() => {
+  const filteredParents = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return activeProducts;
-    return activeProducts.filter(
-      (p) => p.code.toLowerCase().includes(q) || p.modelCode.toLowerCase().includes(q)
-    );
-  }, [search, activeProducts]);
+    if (!q) return parents;
+    return parents.filter((p) => p.code.toLowerCase().includes(q) || p.label.toLowerCase().includes(q));
+  }, [search, parents]);
 
-  const selected = activeProducts.find((p) => pmKey(p) === selectedId) ?? null;
+  const selected = parents.find((p) => p.id === selectedId) ?? null;
 
-  const bomCountByProduct = useMemo(() => {
+  // 親IDごとの構成行数
+  const childCountByParent = useMemo(() => {
     const m = new Map<string, number>();
     bomLines.forEach((b) => m.set(b.productId, (m.get(b.productId) ?? 0) + 1));
     return m;
   }, [bomLines]);
+
+  // 半製品（親に登場する部材コード）
+  const subAssemblyCodes = useMemo(() => {
+    const set = new Set<string>();
+    bomLines.forEach((b) => { if (materialMasters.some((m) => m.code === b.productId)) set.add(b.productId); });
+    return set;
+  }, [bomLines, materialMasters]);
 
   const linesForSelected = useMemo(
     () => bomLines.filter((b) => b.productId === selectedId)
@@ -54,37 +68,51 @@ export default function BomTab() {
     [bomLines, selectedId]
   );
 
-  const materialName = (code: string) => materialMasters.find((m) => m.code === code);
+  const materialOf = (code: string) => materialMasters.find((m) => m.code === code);
+
+  // 追加できる子部材（自身・既存子・循環になるものを除外）
+  const childOptions = useMemo(() => {
+    if (!selectedId) return [];
+    const existing = new Set(linesForSelected.map((l) => l.materialCode));
+    return materialMasters.filter(
+      (m) => !existing.has(m.code) && !wouldCreateBomCycle(selectedId, m.code, bomLines)
+    );
+  }, [selectedId, linesForSelected, materialMasters, bomLines]);
 
   function addLine() {
     if (!selectedId || !newMaterial) return;
-    const qty = parseFloat(newQty);
-    if (isNaN(qty) || qty <= 0) { addToast("error", "員数は正の数で入力してください"); return; }
-    upsertBomLine(selectedId, newMaterial, qty);
-    setNewQty("1");
-    setNewMaterial("");
+    const input = parseFloat(newInput);
+    if (isNaN(input) || input <= 0) { addToast("error", "投入量は正の数で入力してください"); return; }
+    const good = newGood.trim() === "" ? input : parseFloat(newGood);
+    if (isNaN(good) || good < 0 || good > input) { addToast("error", "完成品は0〜投入量の範囲で入力してください"); return; }
+    upsertBomLine(selectedId, newMaterial, input, good);
+    setNewInput("1"); setNewGood(""); setNewMaterial("");
   }
 
-  function handleQtyBlur(materialCode: string, raw: string) {
-    const qty = parseFloat(raw.replace(/,/g, ""));
-    if (isNaN(qty) || qty <= 0) return;
-    upsertBomLine(selectedId, materialCode, qty);
+  function handleInputBlur(line: BomLine, raw: string) {
+    const input = parseFloat(raw.replace(/,/g, ""));
+    if (isNaN(input) || input <= 0) return;
+    const good = Math.min(line.qtyGood ?? line.qtyPer, input);
+    upsertBomLine(selectedId, line.materialCode, input, good);
+  }
+  function handleGoodBlur(line: BomLine, raw: string) {
+    const good = parseFloat(raw.replace(/,/g, ""));
+    if (isNaN(good) || good < 0) return;
+    const input = line.qtyPer;
+    upsertBomLine(selectedId, line.materialCode, input, Math.min(good, input));
   }
 
   async function handleDeleteLine(materialCode: string) {
-    const m = materialName(materialCode);
-    const ok = await requestConfirm(
-      `構成から「${m?.name ?? materialCode}」を外しますか？`,
-      { danger: true, okLabel: "外す" }
-    );
+    const m = materialOf(materialCode);
+    const ok = await requestConfirm(`構成から「${m?.name ?? materialCode}」を外しますか？`, { danger: true, okLabel: "外す" });
     if (!ok) return;
     deleteBomLine(selectedId, materialCode);
   }
 
-  // ── CSV（全BOM一括） ──
+  // ── CSV（全BOM一括）──
   function exportCsv() {
-    const header = "品目コード,部材コード,員数";
-    const rows = bomLines.map((b) => [b.productId, b.materialCode, b.qtyPer].join(","));
+    const header = "親コード,子部材コード,投入量,完成品";
+    const rows = bomLines.map((b) => [b.productId, b.materialCode, b.qtyPer, b.qtyGood ?? b.qtyPer].join(","));
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -104,22 +132,25 @@ export default function BomTab() {
         const text = (ev.target?.result as string).replace(/^\uFEFF/, "");
         const lines = text.split(/\r?\n/).filter((l) => l.trim());
         const start = lines[0]?.includes("コード") ? 1 : 0;
-        const productIds = new Set(activeProducts.map((p) => pmKey(p)));
+        const parentIds = new Set(parents.map((p) => p.id));
         const materialCodes = new Set(materialMasters.map((m) => m.code));
-        const rows: { productId: string; materialCode: string; qtyPer: number }[] = [];
+        const rows: BomLine[] = [];
         let skipped = 0;
         for (let i = start; i < lines.length; i++) {
           const cols = lines[i].split(",").map((s) => s.trim());
-          const productId = cols[0] ?? "";
+          const parentId = cols[0] ?? "";
           const materialCode = cols[1] ?? "";
-          const qtyPer = parseFloat(cols[2] ?? "");
-          if (!productId || !materialCode || isNaN(qtyPer) || qtyPer <= 0) continue;
-          if (!productIds.has(productId) || !materialCodes.has(materialCode)) { skipped++; continue; }
-          rows.push({ productId, materialCode, qtyPer });
+          const input = parseFloat(cols[2] ?? "");
+          // 4列目があれば完成品、なければ投入量＝完成品（旧「員数」形式互換）
+          const good = cols[3] !== undefined && cols[3] !== "" ? parseFloat(cols[3]) : input;
+          if (!parentId || !materialCode || isNaN(input) || input <= 0) continue;
+          if (!parentIds.has(parentId) || !materialCodes.has(materialCode)) { skipped++; continue; }
+          if (wouldCreateBomCycle(parentId, materialCode, bomLines)) { skipped++; continue; }
+          rows.push({ productId: parentId, materialCode, qtyPer: input, qtyGood: isNaN(good) ? input : Math.min(good, input) });
         }
-        if (rows.length === 0) { addToast("error", "有効なBOM行が見つかりません（製品・部材の登録を確認してください）"); return; }
+        if (rows.length === 0) { addToast("error", "有効なBOM行が見つかりません（親・子の登録を確認してください）"); return; }
         importBom(rows);
-        addToast("success", `BOM ${rows.length}行をインポートしました${skipped > 0 ? `（未登録の製品/部材 ${skipped}行はスキップ）` : ""}`);
+        addToast("success", `BOM ${rows.length}行をインポートしました${skipped > 0 ? `（未登録/循環の ${skipped}行はスキップ）` : ""}`);
       } catch {
         addToast("error", "CSVの形式が正しくありません");
       }
@@ -128,13 +159,39 @@ export default function BomTab() {
     e.target.value = "";
   }
 
+  function renderParentGroup(title: string, items: ParentItem[]) {
+    if (items.length === 0) return null;
+    return (
+      <div>
+        <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 bg-gray-50 sticky top-0">{title}</div>
+        {items.map((p) => {
+          const count = childCountByParent.get(p.id) ?? 0;
+          const isSub = p.kind === "material" && subAssemblyCodes.has(p.id);
+          return (
+            <button
+              key={`${p.kind}-${p.id}`}
+              onClick={() => setSelectedId(p.id)}
+              className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors ${
+                selectedId === p.id ? "bg-blue-50 text-blue-800" : "hover:bg-gray-50 text-gray-700"
+              }`}
+            >
+              <span className="font-mono text-gray-400 shrink-0">{p.code || "—"}</span>
+              <span className="flex-1 truncate">{p.label}</span>
+              {isSub && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded shrink-0">半製品</span>}
+              {count > 0 && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* 説明 */}
       <div className="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-        製品1台あたりに使う<strong>部材と員数（使用量）</strong>を登録します。
-        登録すると「所要量計算（MRP）」で生産計画から部材の月別必要量を自動算出できます。
-        部材は先に「部材マスター」へ登録してください。
+        親（製品・半製品）1単位あたりに使う<strong>部材と投入量・完成品</strong>を登録します（スクラップ＝投入−完成）。
+        部材を親に選べば<strong>半製品（多階層）</strong>になります。「所要量計算（MRP）」が各階層を展開して必要量を算出します。
       </div>
 
       {/* ツールバー */}
@@ -147,47 +204,28 @@ export default function BomTab() {
           className="flex items-center gap-1.5 text-xs border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
           <Download className="w-3.5 h-3.5" />CSVエクスポート
         </button>
-        <span className="text-xs text-gray-400">形式：品目コード, 部材コード, 員数</span>
-        <span className="ml-auto text-xs text-gray-400">{bomLines.length} 行 / {bomCountByProduct.size} 製品</span>
+        <span className="text-xs text-gray-400">形式：親コード, 子部材コード, 投入量, 完成品</span>
+        <span className="ml-auto text-xs text-gray-400">{bomLines.length} 行 / {childCountByParent.size} 親</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
-        {/* 製品リスト */}
+        {/* 親リスト */}
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
             <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
             <input
               type="text"
-              placeholder="品目コード・品名で検索..."
+              placeholder="コード・名称で検索..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full text-xs border-none outline-none bg-transparent"
             />
           </div>
-          <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
-            {filteredProducts.map((p) => {
-              const id = pmKey(p);
-              const count = bomCountByProduct.get(id) ?? 0;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setSelectedId(id)}
-                  className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors ${
-                    selectedId === id ? "bg-blue-50 text-blue-800" : "hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  <span className="font-mono text-gray-400 shrink-0">{p.code || "—"}</span>
-                  <span className="flex-1 truncate">{p.modelCode}</span>
-                  {count > 0 && (
-                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">{count}</span>
-                  )}
-                </button>
-              );
-            })}
-            {filteredProducts.length === 0 && (
-              <p className="px-3 py-6 text-center text-xs text-gray-400">
-                {activeProducts.length === 0 ? "製品マスターに品目がありません" : "該当なし"}
-              </p>
+          <div className="max-h-[28rem] overflow-y-auto">
+            {renderParentGroup("製品", filteredParents.filter((p) => p.kind === "product"))}
+            {renderParentGroup("部材・半製品", filteredParents.filter((p) => p.kind === "material"))}
+            {filteredParents.length === 0 && (
+              <p className="px-3 py-6 text-center text-xs text-gray-400">該当なし</p>
             )}
           </div>
         </div>
@@ -197,85 +235,84 @@ export default function BomTab() {
           {!selected ? (
             <div className="py-16 text-center text-gray-400 text-sm">
               <ListTree className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-              左のリストから製品を選択してください
+              左のリストから親（製品・部材）を選択してください
             </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-gray-800">{selected.modelCode}</h3>
+                {selected.kind === "product"
+                  ? <Package className="w-4 h-4 text-blue-500" />
+                  : <Puzzle className="w-4 h-4 text-amber-500" />}
+                <h3 className="text-sm font-semibold text-gray-800">{selected.label}</h3>
                 <span className="text-xs text-gray-400 font-mono">{selected.code}</span>
-                <span className="text-xs text-gray-400 ml-auto">1台あたりの構成</span>
+                <span className="text-xs text-gray-400 ml-auto">1単位あたりの構成</span>
               </div>
 
               {/* 追加フォーム */}
-              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded p-2">
-                <select
-                  value={newMaterial}
-                  onChange={(e) => setNewMaterial(e.target.value)}
-                  className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white flex-1"
-                >
+              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded p-2 flex-wrap">
+                <select value={newMaterial} onChange={(e) => setNewMaterial(e.target.value)}
+                  className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white flex-1 min-w-40">
                   <option value="">部材を選択...</option>
-                  {materialMasters
-                    .filter((m) => !linesForSelected.some((l) => l.materialCode === m.code))
-                    .map((m) => (
-                      <option key={m.code} value={m.code}>{m.code}：{m.name}</option>
-                    ))}
+                  {childOptions.map((m) => <option key={m.code} value={m.code}>{m.code}：{m.name}</option>)}
                 </select>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={newQty}
-                  onChange={(e) => setNewQty(e.target.value)}
+                <input type="text" inputMode="decimal" value={newInput} onChange={(e) => setNewInput(e.target.value)}
+                  className="w-20 text-right text-xs border border-gray-200 rounded px-2 py-1.5" placeholder="投入量" title="投入量" />
+                <input type="text" inputMode="decimal" value={newGood} onChange={(e) => setNewGood(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") addLine(); }}
-                  className="w-20 text-right text-xs border border-gray-200 rounded px-2 py-1.5"
-                  placeholder="員数"
-                />
-                <button onClick={addLine}
-                  disabled={!newMaterial}
+                  className="w-20 text-right text-xs border border-gray-200 rounded px-2 py-1.5" placeholder="完成品(任意)" title="完成品（省略時=投入量）" />
+                <button onClick={addLine} disabled={!newMaterial}
                   className="flex items-center gap-1 text-xs bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700 disabled:opacity-40">
                   <Plus className="w-3.5 h-3.5" />追加
                 </button>
               </div>
               {materialMasters.length === 0 && (
-                <p className="text-xs text-amber-600">部材マスターが空です。先に「部材マスター」タブで部材を登録してください。</p>
+                <p className="text-xs text-amber-600">部材マスターが空です。先に「部材マスター」で部材を登録してください。</p>
               )}
 
               {/* 構成一覧 */}
               {linesForSelected.length === 0 ? (
-                <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded p-4 text-center">
-                  まだ構成部材がありません
-                </p>
+                <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded p-4 text-center">まだ構成部材がありません</p>
               ) : (
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">部材コード</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">部材名</th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-700">員数</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-700">投入量</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-700">完成品</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">スクラップ</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">歩留</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">単位</th>
                       <th className="px-3 py-2 w-12" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {linesForSelected.map((line) => {
-                      const m = materialName(line.materialCode);
+                      const m = materialOf(line.materialCode);
+                      const input = line.qtyPer;
+                      const good = line.qtyGood ?? line.qtyPer;
+                      const scrap = Math.max(0, input - good);
+                      const yld = input > 0 ? (good / input) * 100 : 0;
+                      const childIsSub = subAssemblyCodes.has(line.materialCode);
                       return (
                         <tr key={line.materialCode} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800">{line.materialCode}</td>
-                          <td className="px-3 py-2 text-xs text-gray-700">
-                            {m?.name ?? <span className="text-amber-600">未登録部材</span>}
+                          <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800">
+                            {line.materialCode}
+                            {childIsSub && <span className="ml-1 text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">半製品</span>}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-700">{m?.name ?? <span className="text-amber-600">未登録部材</span>}</td>
+                          <td className="px-3 py-2 text-right">
+                            <input type="text" inputMode="decimal" key={`in-${line.materialCode}-${input}`} defaultValue={String(input)}
+                              onFocus={(e) => e.target.select()} onBlur={(e) => handleInputBlur(line, e.target.value)}
+                              className="w-16 text-right text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400" />
                           </td>
                           <td className="px-3 py-2 text-right">
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              key={`${line.materialCode}-${line.qtyPer}`}
-                              defaultValue={String(line.qtyPer)}
-                              onFocus={(e) => e.target.select()}
-                              onBlur={(e) => handleQtyBlur(line.materialCode, e.target.value)}
-                              className="w-20 text-right text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            />
+                            <input type="text" inputMode="decimal" key={`gd-${line.materialCode}-${good}`} defaultValue={String(good)}
+                              onFocus={(e) => e.target.select()} onBlur={(e) => handleGoodBlur(line, e.target.value)}
+                              className="w-16 text-right text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400" />
                           </td>
+                          <td className={`px-3 py-2 text-right text-xs ${scrap > 0 ? "text-red-500" : "text-gray-300"}`}>{scrap > 0 ? scrap : "—"}</td>
+                          <td className={`px-3 py-2 text-right text-xs ${yld < 100 ? "text-amber-600" : "text-gray-400"}`}>{yld.toFixed(0)}%</td>
                           <td className="px-3 py-2 text-xs text-gray-500">{m?.unit ?? "—"}</td>
                           <td className="px-3 py-2 text-center">
                             <button onClick={() => handleDeleteLine(line.materialCode)}

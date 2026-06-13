@@ -50,11 +50,19 @@ export interface MaterialMaster {
   unit: string;   // 単位（個・kg・m など）
 }
 
-// ========== BOM（部品構成）行：製品1台あたりの部材使用量 ==========
+// ========== BOM（部品構成）行：親1単位あたりの部材使用量（多階層対応） ==========
 export interface BomLine {
-  productId: string;    // 製品の pmKey（品目コード優先）
-  materialCode: string; // 部材コード
-  qtyPer: number;       // 員数（親1台あたり使用量）
+  // 親ID：製品の pmKey または 部材コード（部材が親＝半製品）
+  // ※フィールド名は旧データ互換のため productId のまま
+  productId: string;
+  materialCode: string; // 子の部材コード
+  qtyPer: number;       // 投入量（親1単位あたり）
+  qtyGood?: number;     // 完成品量（省略時 = qtyPer → スクラップ0）
+}
+
+/** BOM行のスクラップ量（投入 − 完成） */
+export function bomScrap(line: BomLine): number {
+  return line.qtyPer - (line.qtyGood ?? line.qtyPer);
 }
 
 // ========== 部材在庫（MRPの引当て開始時点の現在庫） ==========

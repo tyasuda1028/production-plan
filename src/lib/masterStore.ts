@@ -109,10 +109,10 @@ interface MasterStore {
   deleteMaterial: (code: string) => void;
   importMaterials: (rows: MaterialMaster[]) => void;
 
-  // BOM（部品構成）
+  // BOM（部品構成・多階層）：親=製品 or 部材（半製品）
   bomLines: BomLine[];
-  upsertBomLine: (productId: string, materialCode: string, qtyPer: number) => void;
-  deleteBomLine: (productId: string, materialCode: string) => void;
+  upsertBomLine: (parentId: string, materialCode: string, qtyPer: number, qtyGood?: number) => void;
+  deleteBomLine: (parentId: string, materialCode: string) => void;
   importBom: (rows: BomLine[]) => void;
 
   // 部材在庫
@@ -371,9 +371,9 @@ export const useMasterStore = create<MasterStore>()(
 
       deleteMaterial: (code) =>
         set((s) => ({
-          // 部材削除時はBOM行・在庫も連動削除（孤立防止）
+          // 部材削除時はBOM行（子として・親=半製品として両方）・在庫も連動削除
           materialMasters: s.materialMasters.filter((m) => m.code !== code),
-          bomLines: s.bomLines.filter((b) => b.materialCode !== code),
+          bomLines: s.bomLines.filter((b) => b.materialCode !== code && b.productId !== code),
           materialStocks: s.materialStocks.filter((st) => st.materialCode !== code),
         })),
 
@@ -387,18 +387,18 @@ export const useMasterStore = create<MasterStore>()(
       // ── BOM（部品構成） ──
       bomLines: [],
 
-      upsertBomLine: (productId, materialCode, qtyPer) =>
+      upsertBomLine: (parentId, materialCode, qtyPer, qtyGood) =>
         set((s) => ({
           bomLines: [
-            ...s.bomLines.filter((b) => !(b.productId === productId && b.materialCode === materialCode)),
-            { productId, materialCode, qtyPer },
+            ...s.bomLines.filter((b) => !(b.productId === parentId && b.materialCode === materialCode)),
+            { productId: parentId, materialCode, qtyPer, ...(qtyGood !== undefined ? { qtyGood } : {}) },
           ],
         })),
 
-      deleteBomLine: (productId, materialCode) =>
+      deleteBomLine: (parentId, materialCode) =>
         set((s) => ({
           bomLines: s.bomLines.filter(
-            (b) => !(b.productId === productId && b.materialCode === materialCode)
+            (b) => !(b.productId === parentId && b.materialCode === materialCode)
           ),
         })),
 

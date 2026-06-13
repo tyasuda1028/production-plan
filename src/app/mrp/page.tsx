@@ -27,16 +27,20 @@ export default function MrpPage() {
     );
   }, [rows, search]);
 
-  // 月別合計（正味所要量がある部材数）
   const shortageCount = useMemo(
     () => rows.filter((r) => months.some((m) => (r.net.get(m) ?? 0) > 0)).length,
     [rows, months]
   );
 
   function exportCsv() {
-    const header = ["部材コード", "部材名", "単位", "現在庫", ...months.flatMap((m) => [`${formatYearMonth(m)} 総所要量`, `${formatYearMonth(m)} 正味所要量`])].join(",");
+    const header = [
+      "Lv", "区分", "部材コード", "部材名", "単位", "現在庫",
+      ...months.flatMap((m) => [`${formatYearMonth(m)} 総所要量`, `${formatYearMonth(m)} 正味所要量`]),
+    ].join(",");
     const lines = rows.map((r) =>
       [
+        r.level,
+        r.isSubAssembly ? "半製品(内製)" : "購入",
         r.material.code,
         r.material.name,
         r.material.unit,
@@ -60,7 +64,7 @@ export default function MrpPage() {
       <div className="mb-5">
         <h1 className="text-xl font-bold text-gray-800">所要量計算（MRP）</h1>
         <p className="text-sm text-gray-500 mt-1">
-          生産計画 × BOM員数から部材の月別所要量を算出します（{formatYearMonth(months[0])} 〜 {formatYearMonth(months[months.length - 1])}）
+          生産計画 × 多階層BOM（投入量）から、部材・半製品の月別所要量を算出します（{formatYearMonth(months[0])} 〜 {formatYearMonth(months[months.length - 1])}）
         </p>
       </div>
 
@@ -85,7 +89,7 @@ export default function MrpPage() {
             </div>
             {shortageCount > 0 && (
               <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                発注が必要な部材：{shortageCount} 件
+                手配が必要な部材：{shortageCount} 件
               </span>
             )}
             <button onClick={exportCsv}
@@ -95,8 +99,10 @@ export default function MrpPage() {
           </div>
 
           {/* 凡例 */}
-          <div className="text-xs text-gray-400">
-            セル上段＝<strong className="text-amber-700">正味所要量（発注すべき量）</strong>、下段＝総所要量。在庫は月順に引き当てます。
+          <div className="text-xs text-gray-400 flex items-center gap-4 flex-wrap">
+            <span>セル上段＝<strong className="text-gray-600">正味所要量</strong>、下段＝総所要量。在庫は月順・レベル順に引き当てます。</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-amber-50 border border-amber-200" />購入＝発注必要</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-blue-50 border border-blue-200" />半製品＝製造必要</span>
           </div>
 
           {/* テーブル */}
@@ -105,8 +111,10 @@ export default function MrpPage() {
               <table className="w-full text-sm border-collapse min-w-max">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-2 py-2.5 text-center text-xs font-medium text-gray-500 whitespace-nowrap">Lv</th>
                     <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap sticky left-0 bg-gray-50 z-10">部材コード</th>
                     <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-700 whitespace-nowrap">部材名</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">区分</th>
                     <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 whitespace-nowrap">単位</th>
                     <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-700 whitespace-nowrap">現在庫</th>
                     {months.map((ym) => (
@@ -122,30 +130,38 @@ export default function MrpPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered.map((r) => (
-                    <tr key={r.material.code} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800 whitespace-nowrap sticky left-0 bg-inherit z-10">
-                        {r.material.code}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">{r.material.name}</td>
-                      <td className="px-3 py-2 text-xs text-gray-400">{r.material.unit}</td>
-                      <td className="px-3 py-2 text-right text-xs text-gray-600">{r.startStock.toLocaleString()}</td>
-                      {months.map((ym) => {
-                        const net = r.net.get(ym) ?? 0;
-                        const gross = r.gross.get(ym) ?? 0;
-                        return (
-                          <td key={ym} className={`px-3 py-1.5 text-right ${net > 0 ? "bg-amber-50" : ""}`}>
-                            <div className={`text-xs font-semibold ${net > 0 ? "text-amber-700" : "text-gray-300"}`}>
-                              {net > 0 ? net.toLocaleString() : "0"}
-                            </div>
-                            <div className="text-[10px] text-gray-400">
-                              総 {gross.toLocaleString()}
-                            </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                  {filtered.map((r) => {
+                    const sub = r.isSubAssembly;
+                    return (
+                      <tr key={r.material.code} className="hover:bg-gray-50">
+                        <td className="px-2 py-2 text-center text-[10px] text-gray-400">{r.level}</td>
+                        <td className="px-3 py-2 text-xs font-mono font-semibold text-gray-800 whitespace-nowrap sticky left-0 bg-inherit z-10">
+                          {r.material.code}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">{r.material.name}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {sub
+                            ? <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">半製品</span>
+                            : <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">購入</span>}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-400">{r.material.unit}</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-600">{r.startStock.toLocaleString()}</td>
+                        {months.map((ym) => {
+                          const net = r.net.get(ym) ?? 0;
+                          const gross = r.gross.get(ym) ?? 0;
+                          const hi = net > 0;
+                          const bg = hi ? (sub ? "bg-blue-50" : "bg-amber-50") : "";
+                          const fg = hi ? (sub ? "text-blue-700" : "text-amber-700") : "text-gray-300";
+                          return (
+                            <td key={ym} className={`px-3 py-1.5 text-right ${bg}`}>
+                              <div className={`text-xs font-semibold ${fg}`}>{hi ? net.toLocaleString() : "0"}</div>
+                              <div className="text-[10px] text-gray-400">総 {gross.toLocaleString()}</div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -158,8 +174,8 @@ export default function MrpPage() {
           </div>
 
           <p className="text-xs text-gray-400">
-            ※ 生産計画（<Link href="/plan" className="text-blue-500 hover:underline">生産計画表</Link>）の生産数 × BOM員数で計算しています。
-            リードタイム・発注ロットの考慮は今後追加予定です。
+            ※ 生産計画（<Link href="/plan" className="text-blue-500 hover:underline">生産計画表</Link>）の生産数 × 投入量で計算。
+            半製品は正味所要量を内製量として下位部材へ展開します。リードタイム・発注ロットの考慮は今後追加予定です。
           </p>
         </div>
       )}

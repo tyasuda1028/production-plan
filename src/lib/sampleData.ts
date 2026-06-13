@@ -59,6 +59,7 @@ const INVENTORY: Record<string, number> = {
 
 // 部材マスター（M-BOM/MRP用）
 const MATERIALS: MaterialMaster[] = [
+  { code: 'SA01', name: '主基板アセンブリ', unit: '個' }, // 半製品（内製）
   { code: 'M001', name: '制御基板',     unit: '枚' },
   { code: 'M002', name: 'モーターユニット', unit: '個' },
   { code: 'M003', name: '鋼板 1.2mm',   unit: '枚' },
@@ -66,17 +67,22 @@ const MATERIALS: MaterialMaster[] = [
   { code: 'M005', name: '塗料（白）',   unit: 'kg' },
 ];
 
-// BOM（製品コード → [部材コード, 員数]）
-const BOM: Record<string, [string, number][]> = {
-  '1001': [['M001', 1], ['M003', 2], ['M004', 1]],
-  '1002': [['M001', 1], ['M002', 1], ['M003', 4], ['M004', 2]],
-  '1003': [['M001', 1], ['M003', 1], ['M004', 1]],
-  '1004': [['M001', 1], ['M002', 1], ['M004', 1]],
-  '1005': [['M003', 2], ['M005', 0.5]],
+// 親コード → [子部材コード, 投入量, 完成品(省略時=投入量)]
+// 親は製品コード or 部材コード（半製品）。鋼板は歩留まり（投入>完成）の例。
+const BOM: Record<string, [string, number, number?][]> = {
+  // 製品（Lv0）→ 半製品SA01・鋼板・他
+  '1001': [['SA01', 1], ['M003', 2.1, 2], ['M004', 1]],
+  '1002': [['SA01', 1], ['M002', 1], ['M003', 4.2, 4], ['M004', 2]],
+  '1003': [['SA01', 1], ['M003', 1.05, 1], ['M004', 1]],
+  '1004': [['SA01', 1], ['M002', 1], ['M004', 1]],
+  '1005': [['M003', 2.1, 2], ['M005', 0.5]],
+  // 半製品SA01（Lv1）→ Lv2部材
+  'SA01': [['M001', 1], ['M004', 2]],
 };
 
 // 部材コード → 現在庫
 const MATERIAL_STOCK: Record<string, number> = {
+  SA01: 500,
   M001: 8000,
   M002: 2000,
   M003: 15000,
@@ -107,10 +113,17 @@ export function buildSampleData(base: number): SampleData {
   }));
 
   const bomLines: BomLine[] = [];
-  PRODUCTS.forEach((p) => {
-    const id = pmKey(p);
-    (BOM[p.code] ?? []).forEach(([materialCode, qtyPer]) => {
-      bomLines.push({ productId: id, materialCode, qtyPer });
+  const productByCode = new Map(PRODUCTS.map((p) => [p.code, p]));
+  Object.entries(BOM).forEach(([parentCode, children]) => {
+    const prod = productByCode.get(parentCode);
+    const parentId = prod ? pmKey(prod) : parentCode; // 製品ならpmKey、半製品はコードそのもの
+    children.forEach(([materialCode, input, good]) => {
+      bomLines.push({
+        productId: parentId,
+        materialCode,
+        qtyPer: input,
+        ...(good !== undefined ? { qtyGood: good } : {}),
+      });
     });
   });
 
