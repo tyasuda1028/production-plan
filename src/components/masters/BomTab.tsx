@@ -5,9 +5,119 @@ import { useMasterStore } from "@/lib/masterStore";
 import { useUiStore } from "@/lib/uiStore";
 import { pmKey, BomLine } from "@/lib/masterTypes";
 import { wouldCreateBomCycle } from "@/lib/useMrp";
-import { Plus, Trash2, Upload, Download, Search, ListTree, Package, Puzzle } from "lucide-react";
+import { Plus, Trash2, Upload, Download, Search, ListTree, Package, Puzzle, ChevronRight, ChevronDown } from "lucide-react";
+import { MaterialMaster } from "@/lib/masterTypes";
 
 type ParentItem = { id: string; kind: "product" | "material"; code: string; label: string };
+
+/**
+ * 多階層BOMの展開ツリー（読み取り専用）。
+ * rootId を起点に bomLines を辿り、半製品の子はインデントして再帰展開する。
+ */
+function BomTree({
+  rootId, bomLines, materialMasters,
+}: {
+  rootId: string;
+  bomLines: BomLine[];
+  materialMasters: MaterialMaster[];
+}) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const childrenOf = useMemo(() => {
+    const m = new Map<string, BomLine[]>();
+    bomLines.forEach((b) => {
+      if (!m.has(b.productId)) m.set(b.productId, []);
+      m.get(b.productId)!.push(b);
+    });
+    m.forEach((arr) => arr.sort((a, b) => a.materialCode.localeCompare(b.materialCode)));
+    return m;
+  }, [bomLines]);
+
+  const parentSet = useMemo(() => new Set(bomLines.map((b) => b.productId)), [bomLines]);
+  const matOf = (code: string) => materialMasters.find((m) => m.code === code);
+
+  function toggle(path: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  }
+
+  function rows(parentId: string, depth: number, pathPrefix: string, cumInput: number, visited: Set<string>): React.ReactNode[] {
+    const lines = childrenOf.get(parentId) ?? [];
+    return lines.flatMap((line) => {
+      const m = matOf(line.materialCode);
+      const input = line.qtyPer;
+      const good = line.qtyGood ?? line.qtyPer;
+      const scrap = Math.max(0, input - good);
+      const yld = input > 0 ? (good / input) * 100 : 0;
+      const cum = cumInput * input;
+      const isSub = parentSet.has(line.materialCode);
+      const cycle = visited.has(line.materialCode);
+      const path = `${pathPrefix}>${line.materialCode}`;
+      const expandable = isSub && !cycle && depth < 10;
+      const open = expandable && !collapsed.has(path);
+
+      const row = (
+        <tr key={path} className="hover:bg-gray-50">
+          <td className="px-3 py-1.5">
+            <div className="flex items-center" style={{ paddingLeft: depth * 18 }}>
+              {expandable ? (
+                <button onClick={() => toggle(path)} className="p-0.5 text-gray-400 hover:text-gray-700">
+                  {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
+              ) : (
+                <span className="inline-block w-4" />
+              )}
+              <span className="font-mono text-xs font-semibold text-gray-800 ml-1">{line.materialCode}</span>
+              {isSub && <span className="ml-1.5 text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">半製品</span>}
+              {cycle && <span className="ml-1.5 text-[9px] bg-red-100 text-red-600 px-1 py-0.5 rounded">循環</span>}
+            </div>
+          </td>
+          <td className="px-3 py-1.5 text-xs text-gray-700">{m?.name ?? <span className="text-amber-600">未登録部材</span>}</td>
+          <td className="px-3 py-1.5 text-right text-xs text-gray-700">{input}</td>
+          <td className="px-3 py-1.5 text-right text-xs text-gray-700">{good}</td>
+          <td className={`px-3 py-1.5 text-right text-xs ${scrap > 0 ? "text-red-500" : "text-gray-300"}`}>{scrap > 0 ? scrap : "—"}</td>
+          <td className={`px-3 py-1.5 text-right text-xs ${yld < 100 ? "text-amber-600" : "text-gray-400"}`}>{yld.toFixed(0)}%</td>
+          <td className="px-3 py-1.5 text-xs text-gray-400">{m?.unit ?? "—"}</td>
+          <td className="px-3 py-1.5 text-right text-xs font-medium text-blue-700">{Number(cum.toFixed(4)).toLocaleString()}</td>
+        </tr>
+      );
+
+      const children = open
+        ? rows(line.materialCode, depth + 1, path, cum, new Set([...visited, line.materialCode]))
+        : [];
+      return [row, ...children];
+    });
+  }
+
+  const tree = rows(rootId, 0, rootId, 1, new Set([rootId]));
+
+  if (tree.length === 0) {
+    return <p className="text-xs text-gray-400 border border-dashed border-gray-200 rounded p-4 text-center">構成部材がありません</p>;
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-x-auto">
+      <table className="w-full text-sm border-collapse min-w-max">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200">
+            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">構成（部材コード）</th>
+            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">部材名</th>
+            <th className="px-3 py-2 text-right text-xs font-medium text-gray-700">投入量</th>
+            <th className="px-3 py-2 text-right text-xs font-medium text-gray-700">完成品</th>
+            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">スクラップ</th>
+            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">歩留</th>
+            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">単位</th>
+            <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 whitespace-nowrap" title="親（製品/半製品）1単位あたりの総投入量＝経路の投入量の積">累積投入/1単位</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">{tree}</tbody>
+      </table>
+    </div>
+  );
+}
 
 /**
  * BOM（部品構成）タブ — 多階層対応。
@@ -326,6 +436,15 @@ export default function BomTab() {
                   </tbody>
                 </table>
               )}
+
+              {/* 構成ツリー（多階層展開） */}
+              <div className="pt-2">
+                <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold text-gray-600">
+                  <ListTree className="w-3.5 h-3.5 text-gray-400" />
+                  構成ツリー（{selected.label} を起点に下位部材まで展開）
+                </div>
+                <BomTree rootId={selectedId} bomLines={bomLines} materialMasters={materialMasters} />
+              </div>
             </div>
           )}
         </div>
