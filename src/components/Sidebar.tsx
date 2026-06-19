@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import React from "react";
 import {
   LayoutDashboard, Table2, CalendarDays, FlaskConical, Settings,
-  ChevronLeft, ChevronRight, Factory, LogOut, Sparkles, PackageSearch,
+  ChevronLeft, ChevronRight, Factory, LogOut, Sparkles, PackageSearch, ClipboardList,
 } from "lucide-react";
 import { useMasterStore } from "@/lib/masterStore";
 import { useUiStore } from "@/lib/uiStore";
@@ -18,6 +18,7 @@ const clerkEnabled = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 const navItems: { href: string; label: string; icon: React.ElementType; badge?: string; divider?: boolean }[] = [
   { href: "/",          label: "ダッシュボード",   icon: LayoutDashboard },
+  { href: "/monthly",   label: "月次入力",          icon: ClipboardList },
   { href: "/plan",      label: "生産計画表",        icon: Table2 },
   { href: "/schedule",  label: "日割りスケジュール", icon: CalendarDays },
   { href: "/simulate",  label: "生産計画立案",       icon: FlaskConical },

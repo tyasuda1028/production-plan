@@ -434,7 +434,7 @@ function StepDone({ factoryCount, lineCount, productCount, onDashboard, onMaster
         <span><strong className="text-gray-800">{productCount}</strong> 製品</span>
       </div>
       <p className="text-xs text-gray-500">
-        販売計画・在庫数は「マスター設定」の各タブから入力できます。
+        販売計画・在庫数は「月次入力」ページから入力できます（毎月更新）。
       </p>
       <div className="flex items-center justify-center gap-2 pt-1">
         <button onClick={onMasters} className="text-xs border border-gray-300 text-gray-700 rounded px-4 py-2 hover:bg-gray-50">マスター設定へ</button>
