@@ -33,8 +33,7 @@ export default function BrandMark({
           <defs>
             <linearGradient id="brandmark-bg" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor="#6366f1" />
-              <stop offset="0.5" stopColor="#3b82f6" />
-              <stop offset="1" stopColor="#06b6d4" />
+              <stop offset="1" stopColor="#818cf8" />
             </linearGradient>
           </defs>
           <rect width="1024" height="1024" rx="220" fill="url(#brandmark-bg)" />
