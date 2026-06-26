@@ -1,0 +1,19 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions";
+import { getCompanyEntitlement } from "@/lib/entitlement";
+
+export const runtime = "nodejs";
+
+// GET /api/entitlement — 会社の利用権（契約 or 30日トライアル）を返す
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  const cid = session?.user?.companyId;
+  if (!cid) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  try {
+    const ent = await getCompanyEntitlement(cid);
+    return NextResponse.json({ ...ent, companyId: cid });
+  } catch (e) {
+    return NextResponse.json({ message: (e as Error).message }, { status: 500 });
+  }
+}
